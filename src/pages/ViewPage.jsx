@@ -105,7 +105,15 @@ export default function ViewPage() {
     const tableData = displayedQuestions.map((item, index) => {
       const pdfs = item.file_urls || [];
       
-      const linksText = pdfs.map((fileObj, i) => `[${fileObj.topper_name || 'Answer'}]: ${API_BASE_URL}${fileObj.url}`).join('\n');
+      const linksText = pdfs.map((fileObj, i) => {
+        const urlToParse = fileObj.url || '';
+        let cleanUrl = urlToParse.replace('https//', 'https://').replace('http//', 'http://');
+        if (!cleanUrl.startsWith('http')) {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+          cleanUrl = `${baseUrl}${cleanUrl}`;
+        }
+        return `[${fileObj.topper_name || 'Answer'}]: ${cleanUrl}`;
+      }).join('\n');
       
       return [
         index + 1,
@@ -238,20 +246,29 @@ export default function ViewPage() {
                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Extracted Source Sheets ({qa.file_urls?.length || 0})</h4>
                      <div className="flex flex-col gap-2">
                         {qa.file_urls && qa.file_urls.length > 0 ? (
-                           qa.file_urls.map((fileObj, uIdx) => (
-                              <a 
-                                key={uIdx}
-                                href={`${API_BASE_URL}${fileObj.url}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between gap-3 w-full bg-gray-800 hover:bg-teal-600 text-gray-200 hover:text-white px-4 py-3 rounded-lg transition-colors border border-gray-700 hover:border-teal-500 cursor-pointer"
-                              >
-                                <span className="flex items-center gap-2 font-medium text-sm">
-                                  <FileText className="w-4 h-4 text-teal-400" /> {fileObj.topper_name || 'Unknown Topper'}
-                                </span>
-                                <span className="text-xs opacity-50 bg-black/20 px-2 py-1 rounded">View PDF</span>
-                              </a>
-                           ))
+                           qa.file_urls.map((fileObj, uIdx) => {
+                              const getCleanUrl = (url) => {
+                                if (!url) return '#';
+                                let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
+                                if (cleanUrl.startsWith('http')) return cleanUrl;
+                                const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+                                return `${baseUrl}${cleanUrl}`;
+                              };
+                              return (
+                                <a 
+                                  key={uIdx}
+                                  href={getCleanUrl(fileObj.url)} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between gap-3 w-full bg-gray-800 hover:bg-teal-600 text-gray-200 hover:text-white px-4 py-3 rounded-lg transition-colors border border-gray-700 hover:border-teal-500 cursor-pointer"
+                                >
+                                  <span className="flex items-center gap-2 font-medium text-sm">
+                                    <FileText className="w-4 h-4 text-teal-400" /> {fileObj.topper_name || 'Unknown Topper'}
+                                  </span>
+                                  <span className="text-xs opacity-50 bg-black/20 px-2 py-1 rounded">View PDF</span>
+                                </a>
+                              );
+                           })
                         ) : (
                           <span className="text-sm text-gray-600 italic">No associated PDFs extracted.</span>
                         )}
