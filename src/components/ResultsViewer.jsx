@@ -15,6 +15,23 @@ export default function ResultsViewer({ results }) {
     }, {});
   }, [results]);
 
+  // Helper to fix missing colons and handle absolute/relative paths
+  const getCleanUrl = (url) => {
+    if (!url) return '#';
+    
+    // 1. Fix the missing colon if it exists in the database
+    let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
+    
+    // 2. If it's a full Cloudinary/HTTP link, return it as-is
+    if (cleanUrl.startsWith('http')) {
+      return cleanUrl;
+    }
+    
+    // 3. If it's an old relative link, prepend the base URL securely
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    return `${baseUrl}${cleanUrl}`;
+  };
+
   if (!results || results.length === 0) {
     return null;
   }
@@ -46,11 +63,9 @@ export default function ResultsViewer({ results }) {
                     <div className="flex justify-between items-start mb-4">
                       <div className="pr-4">
                         <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Question</h4>
-                        {/* Updated to use question_text */}
                         <p className="text-white font-medium text-md leading-snug">{qa.question_text}</p>
                       </div>
                       
-                      {/* Updated to show Start and End Pages */}
                       <div className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30 whitespace-nowrap">
                         Pgs {qa.start_page}-{qa.end_page}
                       </div>
@@ -62,10 +77,10 @@ export default function ResultsViewer({ results }) {
                     <p className="text-gray-300 leading-relaxed font-light">{qa.topic}</p>
                   </div>
 
-                  {/* New Button to view the sliced PDF */}
+                  {/* Updated Button logic to use our new smart URL helper */}
                   {qa.file_url && (
                     <a 
-                      href={`http://localhost:5000${qa.file_url}`} 
+                      href={getCleanUrl(qa.file_url)} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="mt-auto flex items-center justify-center gap-2 w-full bg-gray-700 hover:bg-indigo-600 text-white py-2 rounded-lg transition-colors font-medium text-sm"
