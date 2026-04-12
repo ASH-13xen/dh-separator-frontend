@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// 1. Remove the '/api' from the local fallback. 
+// It should ONLY be the domain/port.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const uploadPdf = async (file, metadata) => {
   const formData = new FormData();
@@ -11,7 +13,8 @@ export const uploadPdf = async (file, metadata) => {
   if (metadata?.topperMarks) formData.append('topper_marks', metadata.topperMarks);
 
   try {
-    const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
+    // 2. Explicitly add '/api/upload' here
+    const response = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -25,7 +28,8 @@ export const uploadPdf = async (file, metadata) => {
 
 export const fetchQuestions = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/data/questions`);
+    // 3. This one stays exactly the same as you had it
+    const response = await axios.get(`${API_BASE_URL}/api/data/questions`);
     return response.data;
   } catch (error) {
     console.error("Error fetching questions:", error);
