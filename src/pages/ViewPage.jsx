@@ -110,7 +110,7 @@ export default function ViewPage() {
         let cleanUrl = urlToParse.replace('https//', 'https://').replace('http//', 'http://');
         
         if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
-            cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+            cleanUrl = cleanUrl + '.pdf';
         }
 
         if (!cleanUrl.startsWith('http')) {
@@ -257,7 +257,7 @@ export default function ViewPage() {
                                 let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
                                 
                                 if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
-                                    cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+                                    cleanUrl = cleanUrl + '.pdf';
                                 }
 
                                 if (cleanUrl.startsWith('http')) return cleanUrl;

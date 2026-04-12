@@ -24,7 +24,7 @@ export default function ResultsViewer({ results }) {
     
     // 2. Add extension if it's missing (for old cloudinary links) to force PDF viewing/download
     if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
-        cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+        cleanUrl = cleanUrl + '.pdf';
     }
     
     // 3. If it's a full Cloudinary/HTTP link, return it as-is
