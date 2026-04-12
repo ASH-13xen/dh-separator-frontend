@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle } from 'lucide-react';
 import { getParsedSyllabus } from '../utils/upscSyllabus';
 
-const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function CollectivePage() {
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -35,7 +35,7 @@ export default function CollectivePage() {
     if (!selectedSubject) return;
     setIsPreviewing(true);
     try {
-        const response = await fetch(`${API_BASE_URL}/collective/preview?subject=${encodeURIComponent(selectedSubject)}`);
+        const response = await fetch(`${API_BASE_URL}/api/collective/preview?subject=${encodeURIComponent(selectedSubject)}`);
         
         if (!response.ok) {
             const errData = await response.json();
@@ -81,7 +81,7 @@ export default function CollectivePage() {
     setShowModal(false);
     try {
         // Send POST Data via Fetch
-        const response = await fetch(`${API_BASE_URL}/collective/generate`, {
+        const response = await fetch(`${API_BASE_URL}/api/collective/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

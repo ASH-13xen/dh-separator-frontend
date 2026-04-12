@@ -21,13 +21,8 @@ export default function ResultsViewer({ results }) {
     
     // 1. Fix the missing colon if it exists in the database
     let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
-    
-    // 2. Add extension if it's missing (for old cloudinary links) to force PDF viewing/download
-    if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
-        cleanUrl = cleanUrl + '.pdf';
-    }
-    
-    // 3. If it's a full Cloudinary/HTTP link, return it as-is
+
+    // 2. If it's a full Cloudinary/HTTP link, return it as-is
     if (cleanUrl.startsWith('http')) {
       return cleanUrl;
     }
