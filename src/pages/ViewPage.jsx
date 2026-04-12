@@ -108,6 +108,11 @@ export default function ViewPage() {
       const linksText = pdfs.map((fileObj, i) => {
         const urlToParse = fileObj.url || '';
         let cleanUrl = urlToParse.replace('https//', 'https://').replace('http//', 'http://');
+        
+        if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
+            cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+        }
+
         if (!cleanUrl.startsWith('http')) {
           const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
           cleanUrl = `${baseUrl}${cleanUrl}`;
@@ -250,6 +255,11 @@ export default function ViewPage() {
                               const getCleanUrl = (url) => {
                                 if (!url) return '#';
                                 let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
+                                
+                                if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
+                                    cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+                                }
+
                                 if (cleanUrl.startsWith('http')) return cleanUrl;
                                 const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
                                 return `${baseUrl}${cleanUrl}`;

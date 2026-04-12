@@ -22,12 +22,17 @@ export default function ResultsViewer({ results }) {
     // 1. Fix the missing colon if it exists in the database
     let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
     
-    // 2. If it's a full Cloudinary/HTTP link, return it as-is
+    // 2. Add extension if it's missing (for old cloudinary links) to force PDF viewing/download
+    if (cleanUrl.includes('res.cloudinary.com') && !cleanUrl.toLowerCase().endsWith('.pdf')) {
+        cleanUrl = cleanUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:answer.pdf/');
+    }
+    
+    // 3. If it's a full Cloudinary/HTTP link, return it as-is
     if (cleanUrl.startsWith('http')) {
       return cleanUrl;
     }
     
-    // 3. If it's an old relative link, prepend the base URL securely
+    // 4. If it's an old relative link, prepend the base URL securely
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     return `${baseUrl}${cleanUrl}`;
   };
