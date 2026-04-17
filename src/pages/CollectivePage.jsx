@@ -192,21 +192,31 @@ export default function CollectivePage() {
                               
                               <div className="space-y-3 pl-2">
                                   {q.file_urls.map((fileObj, idx) => (
-                                      <label key={idx} className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors ${selections[q._id] === fileObj.url ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                                          <input 
-                                              type="radio" 
-                                              name={`q-${q._id}`}
-                                              value={fileObj.url}
-                                              checked={selections[q._id] === fileObj.url}
-                                              onChange={() => handleSelectionChange(q._id, fileObj.url)}
-                                              className="w-4 h-4 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600 focus:ring-2"
-                                          />
-                                          <div className="flex items-center gap-2">
-                                              <UserCheck className="w-5 h-5 opacity-70" />
-                                              <span className="font-bold text-base">{fileObj.topper_name || 'Unknown Reference'}</span>
-                                          </div>
-                                      </label>
-                                  ))}
+    <label 
+        key={idx} 
+        // 1. Added `justify-center` here to center the radio button + text block as a whole
+        className={`flex items-center justify-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors ${
+            selections[q._id] === fileObj.url 
+                ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' 
+                : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:border-gray-500'
+        }`}
+    >
+        <input 
+            type="radio" 
+            name={`q-${q._id}`}
+            value={fileObj.url}
+            checked={selections[q._id] === fileObj.url}
+            onChange={() => handleSelectionChange(q._id, fileObj.url)}
+            className="w-4 h-4 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600 focus:ring-2"
+        />
+        
+        {/* 2. Added `justify-center` here to ensure inner content stays perfectly aligned */}
+        <div className="flex items-center justify-center gap-2">
+            <UserCheck className="w-5 h-5 opacity-70" />
+            <span className="font-bold text-base">{fileObj.topper_name || 'Unknown Reference'}</span>
+        </div>
+    </label>
+))}
                               </div>
                           </div>
                       ))}

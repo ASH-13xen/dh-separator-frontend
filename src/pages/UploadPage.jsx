@@ -10,12 +10,14 @@ export default function UploadPage() {
   const [file, setFile] = useState(null);
   
   // Metadata States
-  const [metadata, setMetadata] = useState({
+  const [metadataList, setMetadataList] = useState([
+    {
       topperName: '',
       topperYear: '',
       topperRank: '',
       topperMarks: ''
-  });
+    }
+  ]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ export default function UploadPage() {
     setResults([]);
 
     try {
-      const response = await uploadPdf(file, metadata);
+      const response = await uploadPdf(file, metadataList);
       setResults(response.data);
     } catch (err) {
       setError(err.error || err.message || "Failed to process document.");
@@ -99,10 +101,8 @@ export default function UploadPage() {
             setFile(selected);
             setError(''); 
           }} 
-          metadata={metadata}
-          onMetadataChange={(key, value) => {
-            setMetadata(prev => ({ ...prev, [key]: value }));
-          }}
+          metadataList={metadataList}
+          onUpdateMetadataList={(newList) => setMetadataList(newList)}
           isProcessing={isLoading} 
         />
 

@@ -4,13 +4,12 @@ import axios from 'axios';
 // It should ONLY be the domain/port.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-export const uploadPdf = async (file, metadata) => {
+export const uploadPdf = async (file, metadataList) => {
   const formData = new FormData();
   formData.append('pdf', file);
-  if (metadata?.topperName) formData.append('topper_name', metadata.topperName);
-  if (metadata?.topperYear) formData.append('topper_year', metadata.topperYear);
-  if (metadata?.topperRank) formData.append('topper_rank', metadata.topperRank);
-  if (metadata?.topperMarks) formData.append('topper_marks', metadata.topperMarks);
+  if (metadataList && Array.isArray(metadataList)) {
+    formData.append('metadataList', JSON.stringify(metadataList));
+  }
 
   try {
     // 2. Explicitly add '/api/upload' here
