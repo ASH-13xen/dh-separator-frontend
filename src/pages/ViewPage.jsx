@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchQuestions } from '../services/api';
-import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle } from 'lucide-react';
+import { fetchQuestions, updateQuestion } from '../services/api';
+import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle, Edit2, Check, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -19,6 +19,11 @@ export default function ViewPage() {
   // Filtering States
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [selectedTopic, setSelectedTopic] = useState('All');
+
+  // Editing States
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ subject: '', topic: '' });
+  const [isSaving, setIsSaving] = useState(false);
 
   // Hardcoded parsed lists combined with dynamic db lists
   const { subjects: rawSubjects, topicsBySub: rawTopicsBySub } = useMemo(() => getParsedSyllabus(), []);
@@ -227,21 +232,66 @@ export default function ViewPage() {
            <div className="text-center py-20 text-gray-500">No questions match your selected filters.</div>
          ) : (
            <div className="space-y-6 pb-24">
-              {displayedQuestions.map((qa, idx) => (
-                <div key={idx} className="bg-gray-800/40 border border-gray-700/50 p-6 rounded-2xl shadow-md hover:border-teal-500/50 transition-colors flex flex-col lg:flex-row gap-6">
-                  
-                  <div className="flex-1">
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-                          {qa.subject}
-                        </span>
-                        <span className="bg-gray-700/50 text-gray-300 px-3 py-1 rounded-full text-xs border border-gray-600">
-                          {qa.topic}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Question Context</h4>
-                      <p className="text-white font-medium text-lg leading-snug">{qa.question_text}</p>
-                  </div>
+              {displayedQuestions.map((qa, idx) => {
+                const isEditing = editingId === qa._id && qa._id;
+                return (
+                 <div key={qa._id || idx} className="relative group bg-gray-800/40 border border-gray-700/50 p-6 rounded-2xl shadow-md hover:border-teal-500/50 transition-colors flex flex-col lg:flex-row gap-6">
+                   
+                   {!isEditing && qa._id && (
+                     <button 
+                       onClick={() => handleEditClick(qa)}
+                       className="absolute top-4 right-4 bg-gray-700 hover:bg-teal-600 p-2 rounded-lg text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                       title="Edit Classification"
+                     >
+                       <Edit2 className="w-4 h-4" />
+                     </button>
+                   )}
+
+                   <div className="flex-1 pr-8">
+                       <div className="flex flex-col gap-3 mb-4">
+                         {isEditing ? (
+                             <div className="space-y-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                               <div>
+                                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Subject</label>
+                                 <input
+                                   type="text"
+                                   value={editForm.subject}
+                                   onChange={(e) => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
+                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
+                                 />
+                               </div>
+                               <div>
+                                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Topic</label>
+                                 <input
+                                   type="text"
+                                   value={editForm.topic}
+                                   onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
+                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
+                                 />
+                               </div>
+                               <div className="flex gap-2 justify-end pt-2">
+                                 <button onClick={handleCancelEdit} disabled={isSaving} className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+                                   <X className="w-4 h-4" /> Cancel
+                                 </button>
+                                 <button onClick={() => handleSaveEdit(qa._id)} disabled={isSaving} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+                                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
+                                 </button>
+                               </div>
+                             </div>
+                         ) : (
+                             <div className="flex flex-wrap gap-2">
+                               <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
+                                 {qa.subject}
+                               </span>
+                               <span className="bg-gray-700/50 text-gray-300 px-3 py-1 rounded-full text-xs border border-gray-600">
+                                 {qa.topic}
+                               </span>
+                             </div>
+                         )}
+                       </div>
+                       <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Question Context</h4>
+                       <p className="text-white font-medium text-lg leading-snug">{qa.question_text}</p>
+                   </div>
 
                   <div className="lg:w-1/3 bg-gray-900/50 rounded-xl p-4 border border-gray-700">
                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Extracted Source Sheets ({qa.file_urls?.length || 0})</h4>
@@ -278,7 +328,8 @@ export default function ViewPage() {
                   </div>
 
                 </div>
-              ))}
+              )}
+              )}
            </div>
          )}
 
