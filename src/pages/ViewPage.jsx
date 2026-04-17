@@ -278,21 +278,43 @@ export default function ViewPage() {
                              <div className="space-y-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
                                <div>
                                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Subject</label>
-                                 <input
-                                   type="text"
+                                 <select
                                    value={editForm.subject}
                                    onChange={(e) => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
-                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
-                                 />
+                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                 >
+                                   <option value="" disabled>Select a Subject</option>
+                                   {subjects.filter(s => s !== 'All').map(sub => (
+                                     <option key={sub} value={sub}>{sub}</option>
+                                   ))}
+                                   {/* Ensure current subject is in list even if not in preexisting DB */}
+                                   {!subjects.includes(editForm.subject) && editForm.subject && (
+                                     <option value={editForm.subject}>{editForm.subject}</option>
+                                   )}
+                                 </select>
                                </div>
                                <div>
                                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Topic</label>
-                                 <input
-                                   type="text"
+                                 <select
                                    value={editForm.topic}
                                    onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
-                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
-                                 />
+                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                 >
+                                   <option value="" disabled>Select a Topic</option>
+                                   {/* We use the preexisting `topics` minus 'All'. 
+                                      If the user changes subject, `topics` from useMemo might be constrained if they have a filter active, 
+                                      so we will just render all globally known topics from rawTopicsBySub and questions */}
+                                   {Array.from(new Set([
+                                     ...Object.values(rawTopicsBySub).flat(),
+                                     ...questions.map(q => q.topic).filter(Boolean)
+                                   ])).sort().map(top => (
+                                     <option key={top} value={top}>{top}</option>
+                                   ))}
+                                   {/* Ensure current topic is always selectable */}
+                                   {!Array.from(new Set([...Object.values(rawTopicsBySub).flat(), ...questions.map(q => q.topic).filter(Boolean)])).includes(editForm.topic) && editForm.topic && (
+                                     <option value={editForm.topic}>{editForm.topic}</option>
+                                   )}
+                                 </select>
                                </div>
                                <div className="flex gap-2 justify-end pt-2">
                                  <button onClick={handleCancelEdit} disabled={isSaving} className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">

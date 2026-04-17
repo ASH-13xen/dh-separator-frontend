@@ -1,11 +1,32 @@
 import React, { useMemo, useState } from 'react';
 import { FileQuestion, FileText, Edit2, Check, X, Loader2 } from 'lucide-react';
 import { updateQuestion } from '../services/api';
+import { getParsedSyllabus } from '../utils/upscSyllabus';
 
 export default function ResultsViewer({ results, onResultUpdate }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ subject: '', topic: '' });
   const [isSaving, setIsSaving] = useState(false);
+
+  const { subjects: rawSubjects, topicsBySub: rawTopicsBySub } = useMemo(() => getParsedSyllabus(), []);
+
+  const subjectsOptions = useMemo(() => {
+    const dbSubs = new Set(results.map((q) => q.subject).filter(Boolean));
+    rawSubjects.forEach(s => { 
+      if (s !== 'All') {
+        const cleanName = s.replace(/\s*\(Paper [IV]+\)/i, '').trim();
+        dbSubs.add(cleanName);
+      }
+    }); 
+    return Array.from(dbSubs).sort();
+  }, [results, rawSubjects]);
+
+  const topicsOptions = useMemo(() => {
+    return Array.from(new Set([
+      ...Object.values(rawTopicsBySub).flat(),
+      ...results.map(q => q.topic).filter(Boolean)
+    ])).sort();
+  }, [rawTopicsBySub, results]);
 
   const groupedResults = useMemo(() => {
     if (!results || !Array.isArray(results)) return {};
@@ -23,16 +44,8 @@ export default function ResultsViewer({ results, onResultUpdate }) {
   // Helper to fix missing colons and handle absolute/relative paths
   const getCleanUrl = (url) => {
     if (!url) return '#';
-    
-    // 1. Fix the missing colon if it exists in the database
     let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
-
-    // 2. If it's a full Cloudinary/HTTP link, return it as-is
-    if (cleanUrl.startsWith('http')) {
-      return cleanUrl;
-    }
-    
-    // 4. If it's an old relative link, prepend the base URL securely
+    if (cleanUrl.startsWith('http')) return cleanUrl;
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     return `${baseUrl}${cleanUrl}`;
   };
@@ -63,9 +76,7 @@ export default function ResultsViewer({ results, onResultUpdate }) {
     }
   };
 
-  if (!results || results.length === 0) {
-    return null;
-  }
+  if (!results || results.length === 0) return null;
 
   return (
     <div className="w-full max-w-5xl mx-auto mt-12 mb-24 space-y-8 animate-in fade-in zoom-in duration-500">
@@ -93,7 +104,6 @@ export default function ResultsViewer({ results, onResultUpdate }) {
 
                 return (
                   <div key={qa._id || idx} className="bg-gray-800/60 border border-gray-700 p-6 rounded-2xl shadow-xl hover:border-indigo-500/50 transition-colors flex flex-col justify-between relative group">
-                    {/* EDIT BUTTON */}
                     {!isEditing && qa._id && (
                       <button 
                         onClick={() => handleEditClick(qa)}
@@ -110,7 +120,6 @@ export default function ResultsViewer({ results, onResultUpdate }) {
                           <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Question</h4>
                           <p className="text-white font-medium text-md leading-snug">{qa.question_text}</p>
                         </div>
-                        
                         <div className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30 whitespace-nowrap hidden sm:block">
                           Pgs {qa.start_page}-{qa.end_page}
                         </div>
@@ -122,23 +131,31 @@ export default function ResultsViewer({ results, onResultUpdate }) {
                         <>
                           <div>
                             <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Subject</h4>
-                            <input
-                              type="text"
+                            <select
                               value={editForm.subject}
                               onChange={(e) => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
-                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400"
-                              placeholder="Enter Subject..."
-                            />
+                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
+                            >
+                              <option value="" disabled>Select Subject...</option>
+                              {subjectsOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                              {!subjectsOptions.includes(editForm.subject) && editForm.subject && (
+                                <option value={editForm.subject}>{editForm.subject}</option>
+                              )}
+                            </select>
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Detailed Topic</h4>
-                            <input
-                              type="text"
+                            <select
                               value={editForm.topic}
                               onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
-                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400"
-                              placeholder="Enter Topic..."
-                            />
+                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
+                            >
+                              <option value="" disabled>Select Topic...</option>
+                              {topicsOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                              {!topicsOptions.includes(editForm.topic) && editForm.topic && (
+                                <option value={editForm.topic}>{editForm.topic}</option>
+                              )}
+                            </select>
                           </div>
                           <div className="flex gap-2 justify-end pt-2">
                             <button
