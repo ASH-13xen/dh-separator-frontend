@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle } from 'lucide-react';
+import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye } from 'lucide-react';
 import { getParsedSyllabus } from '../utils/upscSyllabus';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
@@ -14,10 +14,14 @@ export default function CollectivePage() {
   
   // Data tracking
   const [previewData, setPreviewData] = useState([]);
-  const [conflictedQuestions, setConflictedQuestions] = useState([]);
   
   // Selections Object: { question_id: 'file_url' }
   const [selections, setSelections] = useState({});
+  // Included set: question_ids that are checked to be included
+  const [includedQuestions, setIncludedQuestions] = useState(new Set());
+  
+  // Final PDF View
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
 
   const { subjects: rawSubjects } = useMemo(() => getParsedSyllabus(), []);
   const subjects = useMemo(() => {
@@ -34,6 +38,7 @@ export default function CollectivePage() {
   const handleFetchPreview = async () => {
     if (!selectedSubject) return;
     setIsPreviewing(true);
+    setPdfBlobUrl(null); // Reset preview on new fetch
     try {
         const response = await fetch(`${API_BASE_URL}/api/collective/preview?subject=${encodeURIComponent(selectedSubject)}`);
         
@@ -45,23 +50,18 @@ export default function CollectivePage() {
         const data = await response.json();
         setPreviewData(data);
 
-        // Detect Conflicts (Questions with > 1 file_url uploaded)
-        const conflicts = data.filter(q => q.file_urls && q.file_urls.length > 1);
-        
-        if (conflicts.length > 0) {
-            setConflictedQuestions(conflicts);
-            // Default select the first one for UX
-            const initSelects = {};
-            conflicts.forEach(c => {
-                initSelects[c._id] = c.file_urls[0].url;
-            });
-            setSelections(initSelects);
-            setShowModal(true);
-        } else {
-            // No conflicts, directly submit generate!
-            submitGeneration({});
-        }
+        const initSelects = {};
+        const initIncluded = new Set();
+        data.forEach(q => {
+            initIncluded.add(q._id);
+            if (q.file_urls && q.file_urls.length > 0) {
+                initSelects[q._id] = q.file_urls[0].url;
+            }
+        });
 
+        setSelections(initSelects);
+        setIncludedQuestions(initIncluded);
+        setShowModal(true);
     } catch (err) {
         alert(err.message);
     } finally {
@@ -76,9 +76,25 @@ export default function CollectivePage() {
       }));
   };
 
-  const submitGeneration = async (finalSelections) => {
+  const toggleIncludeQuestion = (qId) => {
+      setIncludedQuestions(prev => {
+          const next = new Set(prev);
+          if (next.has(qId)) next.delete(qId);
+          else next.add(qId);
+          return next;
+      });
+  };
+
+  const handleSelectAllToggle = () => {
+      if (includedQuestions.size === previewData.length) {
+          setIncludedQuestions(new Set()); // Deselect all
+      } else {
+          setIncludedQuestions(new Set(previewData.map(q => q._id))); // Select all
+      }
+  };
+
+  const generateAndPreviewPdf = async () => {
     setIsGenerating(true);
-    setShowModal(false);
     try {
         // Send POST Data via Fetch
         const response = await fetch(`${API_BASE_URL}/api/collective/generate`, {
@@ -88,7 +104,8 @@ export default function CollectivePage() {
             },
             body: JSON.stringify({
                 subject: selectedSubject,
-                selections: finalSelections
+                selections: selections,
+                includedQuestionIds: Array.from(includedQuestions)
             })
         });
 
@@ -98,22 +115,27 @@ export default function CollectivePage() {
         }
 
         const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `Formal_UPSC_Book_${selectedSubject.replace(/[^a-z0-9]/gi, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
+        const url = window.URL.createObjectURL(blob);
+        setPdfBlobUrl(url);
 
     } catch (err) {
         alert(err.message);
-        setShowModal(true); // Pop back open in case they want to retry
     } finally {
         setIsGenerating(false);
     }
   };
+
+  const downloadFinalPdf = () => {
+      if (!pdfBlobUrl) return;
+      const link = document.createElement('a');
+      link.href = pdfBlobUrl;
+      link.download = `Formal_UPSC_Book_${selectedSubject.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+  };
+
+  const isAllSelected = includedQuestions.size === previewData.length && previewData.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-12 font-sans overflow-x-hidden flex flex-col items-center justify-center relative">
@@ -168,76 +190,132 @@ export default function CollectivePage() {
       {/* Interactive Selection Modal */}
       {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!isGenerating) setShowModal(false) }} />
               
-              <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col animate-in zoom-in-95 overflow-hidden">
+              <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 overflow-hidden">
                   
-                  <div className="p-6 border-b border-gray-800 bg-gray-800/40 flex items-start gap-4">
-                      <div className="bg-amber-500/20 p-3 rounded-xl border border-amber-500/30 text-amber-400">
-                          <AlertTriangle className="w-6 h-6" />
-                      </div>
-                      <div>
-                          <h2 className="text-xl font-bold text-white mb-1">Conflicting Answers Detected</h2>
-                          <p className="text-sm text-gray-400">
-                              For the Subject "{selectedSubject}", several questions have been explicitly answered by multiple Toppers. To construct the book cleanly, please choose exactly <strong>one</strong> answer to integrate per question.
-                          </p>
-                      </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-900/50">
-                      {conflictedQuestions.map((q, qIndex) => (
-                          <div key={q._id} className="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
-                              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">Question {qIndex + 1} | {q.topic}</h3>
-                              <p className="text-white text-lg font-medium leading-snug mb-5">{q.question_text}</p>
-                              
-                              <div className="space-y-3 pl-2">
-                                  {q.file_urls.map((fileObj, idx) => (
-    <label 
-        key={idx} 
-        // 1. Added `justify-center` here to center the radio button + text block as a whole
-        className={`flex items-center justify-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors ${
-            selections[q._id] === fileObj.url 
-                ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' 
-                : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:border-gray-500'
-        }`}
-    >
-        <input 
-            type="radio" 
-            name={`q-${q._id}`}
-            value={fileObj.url}
-            checked={selections[q._id] === fileObj.url}
-            onChange={() => handleSelectionChange(q._id, fileObj.url)}
-            className="w-4 h-4 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600 focus:ring-2"
-        />
-        
-        {/* 2. Added `justify-center` here to ensure inner content stays perfectly aligned */}
-        <div className="flex items-center justify-center gap-2">
-            <UserCheck className="w-5 h-5 opacity-70" />
-            <span className="font-bold text-base">{fileObj.topper_name || 'Unknown Reference'}</span>
-        </div>
-    </label>
-))}
+                  {pdfBlobUrl ? (
+                      // ---------------- PDF PREVIEW MODE ----------------
+                      <>
+                          <div className="p-4 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between">
+                              <div>
+                                  <h2 className="text-xl font-bold text-white mb-1">Document Preview</h2>
+                                  <p className="text-sm text-gray-400">Verify the layout before downloading</p>
                               </div>
+                              <button 
+                                  onClick={() => setPdfBlobUrl(null)}
+                                  className="px-4 py-2 rounded-lg text-sm font-bold bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                              >
+                                  Back to Editing
+                              </button>
                           </div>
-                      ))}
-                  </div>
+                          <div className="flex-1 bg-gray-800/50 p-2 overflow-hidden">
+                              <iframe src={pdfBlobUrl} className="w-full h-full rounded-xl border border-gray-700" title="PDF Preview" />
+                          </div>
+                          <div className="p-4 border-t border-gray-800 bg-gray-800/40 flex justify-end gap-4">
+                              <button 
+                                  onClick={() => setShowModal(false)}
+                                  className="px-6 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:text-white transition-colors"
+                              >
+                                  Close
+                              </button>
+                              <button 
+                                  onClick={downloadFinalPdf}
+                                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-8 rounded-lg shadow-lg transition-all flex items-center gap-2"
+                              >
+                                  <Download className="w-5 h-5" /> Download PDF
+                              </button>
+                          </div>
+                      </>
+                  ) : (
+                      // ---------------- QUESTION SELECTION MODE ----------------
+                      <>
+                          <div className="p-6 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between gap-4">
+                              <div>
+                                  <h2 className="text-xl font-bold text-white mb-1">Assemble Questions</h2>
+                                  <p className="text-sm text-gray-400">
+                                      Select the questions to include. If multiple answers exist, pick your preferred topper.
+                                  </p>
+                              </div>
+                              <button 
+                                  onClick={handleSelectAllToggle}
+                                  className={`px-4 py-2 flex items-center gap-2 rounded-lg text-sm font-bold transition-colors ${isAllSelected ? 'bg-indigo-600 text-white border-indigo-500 border' : 'bg-gray-800 text-gray-300 border border-gray-600 hover:bg-gray-700'}`}
+                              >
+                                  {isAllSelected ? <CheckSquare className="w-4 h-4"/> : <Square className="w-4 h-4" />}
+                                  {isAllSelected ? 'Deselect All' : 'Select All'}
+                              </button>
+                          </div>
 
-                  <div className="p-6 border-t border-gray-800 bg-gray-800/40 flex justify-end gap-4">
-                      <button 
-                          onClick={() => setShowModal(false)}
-                          className="px-6 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:text-white transition-colors"
-                      >
-                          Cancel
-                      </button>
-                      <button 
-                          onClick={() => submitGeneration(selections)}
-                          disabled={isGenerating}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-8 rounded-lg shadow-lg hover:shadow-emerald-500/25 transition-all flex items-center gap-2"
-                      >
-                          {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                          Confirm & Generate Matrix
-                      </button>
-                  </div>
+                          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-900/50">
+                              {previewData.map((q, qIndex) => {
+                                  const isIncluded = includedQuestions.has(q._id);
+                                  
+                                  return (
+                                  <div key={q._id} className={`rounded-xl p-5 border transition-colors ${isIncluded ? 'bg-gray-800 border-indigo-500/50' : 'bg-gray-800/40 border-gray-700 opacity-60'}`}>
+                                      <div className="flex items-start gap-4 mb-4">
+                                          <button onClick={() => toggleIncludeQuestion(q._id)} className="mt-1 flex-shrink-0">
+                                              {isIncluded ? <CheckSquare className="w-6 h-6 text-indigo-500"/> : <Square className="w-6 h-6 text-gray-500" />}
+                                          </button>
+                                          <div>
+                                              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-1">Question {qIndex + 1} | {q.topic}</h3>
+                                              <p className="text-white text-lg font-medium leading-snug">{q.question_text}</p>
+                                          </div>
+                                      </div>
+                                      
+                                      {isIncluded && q.file_urls && q.file_urls.length > 0 && (
+                                          <div className="space-y-3 pl-10">
+                                              <p className="text-xs text-gray-500 font-bold uppercase">Available Answers:</p>
+                                              {q.file_urls.map((fileObj, idx) => (
+                                                  <label 
+                                                      key={idx} 
+                                                      className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                                          selections[q._id] === fileObj.url 
+                                                              ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' 
+                                                              : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:border-gray-500'
+                                                      }`}
+                                                  >
+                                                      <input 
+                                                          type="radio" 
+                                                          name={`q-${q._id}`}
+                                                          value={fileObj.url}
+                                                          checked={selections[q._id] === fileObj.url}
+                                                          onChange={() => handleSelectionChange(q._id, fileObj.url)}
+                                                          className="w-4 h-4 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600 focus:ring-2"
+                                                      />
+                                                      
+                                                      <div className="flex items-center gap-2">
+                                                          <UserCheck className="w-4 h-4 opacity-70" />
+                                                          <span className="font-bold text-sm tracking-wide">
+                                                              {fileObj.topper_name || 'Unknown Reference'}
+                                                              {fileObj.topper_year ? ` (${fileObj.topper_year})` : ''} - {fileObj.topper_rank ? `Rank ${fileObj.topper_rank}` : 'Unknown Rank'}
+                                                          </span>
+                                                      </div>
+                                                  </label>
+                                              ))}
+                                          </div>
+                                      )}
+                                  </div>
+                              )})}
+                          </div>
+
+                          <div className="p-6 border-t border-gray-800 bg-gray-800/40 flex justify-end gap-4">
+                              <button 
+                                  onClick={() => setShowModal(false)}
+                                  className="px-6 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:text-white transition-colors"
+                              >
+                                  Cancel
+                              </button>
+                              <button 
+                                  onClick={generateAndPreviewPdf}
+                                  disabled={isGenerating || includedQuestions.size === 0}
+                                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 px-8 rounded-lg shadow-lg transition-all flex items-center gap-2"
+                              >
+                                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Eye className="w-5 h-5" />}
+                                  Generate Preview
+                              </button>
+                          </div>
+                      </>
+                  )}
               </div>
           </div>
       )}
