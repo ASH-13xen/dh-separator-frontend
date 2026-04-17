@@ -36,3 +36,13 @@ export const fetchQuestions = async () => {
     throw error.response?.data || { error: 'Failed to retrieve questions from server.' };
   }
 };
+
+export const updateQuestion = async (id, data) => {
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/data/questions/${id}`, data);
+    return response.data;
+  } catch (error) {
+    console.error("Error updating question:", error);
+    throw error.response?.data || { error: 'Failed to update question.' };
+  }
+};

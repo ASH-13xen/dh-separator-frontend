@@ -135,7 +135,12 @@ export default function UploadPage() {
           </div>
         )}
 
-        <ResultsViewer results={results} />
+        <ResultsViewer 
+          results={results} 
+          onResultUpdate={(updated) => {
+            setResults(prev => prev.map(r => r._id === updated._id ? updated : r));
+          }}
+        />
 
       </main>
 
