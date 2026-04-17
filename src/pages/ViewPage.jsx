@@ -148,6 +148,31 @@ export default function ViewPage() {
     doc.save(`UPSC_Filtered_${filenameSub}${filenameTop}.pdf`);
   };
 
+  const handleEditClick = (qa) => {
+    setEditingId(qa._id);
+    setEditForm({ subject: qa.subject || '', topic: qa.topic || '' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ subject: '', topic: '' });
+  };
+
+  const handleSaveEdit = async (id) => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateQuestion(id, editForm);
+      setQuestions(prev => prev.map(q => q._id === id ? updated : q));
+      setEditingId(null);
+    } catch (err) {
+      alert(err.error || 'Failed to save changes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-gray-100 flex flex-col justify-center items-center">
