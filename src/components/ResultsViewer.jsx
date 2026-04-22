@@ -1,47 +1,18 @@
-import React, { useMemo, useState } from 'react';
-import { FileQuestion, FileText, Edit2, Check, X, Loader2 } from 'lucide-react';
-import { updateQuestion } from '../services/api';
-import { getParsedSyllabus } from '../utils/upscSyllabus';
+import React, { useMemo, useState, useEffect } from 'react';
+import { FileQuestion, FileText, Edit2, Check, X, Loader2, Plus } from 'lucide-react';
+import { updateQuestion, fetchTags } from '../services/api';
 
 export default function ResultsViewer({ results, onResultUpdate }) {
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ subject: '', topic: '' });
+  const [editFormTags, setEditFormTags] = useState([]);
+  const [newTagToAdd, setNewTagToAdd] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [validTags, setValidTags] = useState([]);
 
-  const { subjects: rawSubjects, topicsBySub: rawTopicsBySub } = useMemo(() => getParsedSyllabus(), []);
+  useEffect(() => {
+    fetchTags().then(setValidTags).catch(console.error);
+  }, []);
 
-  const subjectsOptions = useMemo(() => {
-    const dbSubs = new Set(results.map((q) => q.subject).filter(Boolean));
-    rawSubjects.forEach(s => { 
-      if (s !== 'All') {
-        const cleanName = s.replace(/\s*\(Paper [IV]+\)/i, '').trim();
-        dbSubs.add(cleanName);
-      }
-    }); 
-    return Array.from(dbSubs).sort();
-  }, [results, rawSubjects]);
-
-  const topicsOptions = useMemo(() => {
-    return Array.from(new Set([
-      ...Object.values(rawTopicsBySub).flat(),
-      ...results.map(q => q.topic).filter(Boolean)
-    ])).sort();
-  }, [rawTopicsBySub, results]);
-
-  const groupedResults = useMemo(() => {
-    if (!results || !Array.isArray(results)) return {};
-    
-    return results.reduce((acc, curr) => {
-      const subject = curr.subject || 'Uncategorized';
-      if (!acc[subject]) {
-        acc[subject] = [];
-      }
-      acc[subject].push(curr);
-      return acc;
-    }, {});
-  }, [results]);
-
-  // Helper to fix missing colons and handle absolute/relative paths
   const getCleanUrl = (url) => {
     if (!url) return '#';
     let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
@@ -52,19 +23,21 @@ export default function ResultsViewer({ results, onResultUpdate }) {
 
   const handleEditClick = (qa) => {
     setEditingId(qa._id);
-    setEditForm({ subject: qa.subject || '', topic: qa.topic || '' });
+    setEditFormTags(qa.tags || []);
+    setNewTagToAdd('');
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditForm({ subject: '', topic: '' });
+    setEditFormTags([]);
+    setNewTagToAdd('');
   };
 
   const handleSaveEdit = async (id) => {
     if (!id) return;
     setIsSaving(true);
     try {
-      const updated = await updateQuestion(id, editForm);
+      const updated = await updateQuestion(id, { tags: editFormTags });
       if (onResultUpdate) {
         onResultUpdate(updated);
       }
@@ -74,6 +47,17 @@ export default function ResultsViewer({ results, onResultUpdate }) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const addTagToForm = () => {
+    if (newTagToAdd && !editFormTags.includes(newTagToAdd)) {
+        setEditFormTags([...editFormTags, newTagToAdd]);
+        setNewTagToAdd('');
+    }
+  };
+
+  const removeTagFromForm = (tagToRemove) => {
+      setEditFormTags(editFormTags.filter(t => t !== tagToRemove));
   };
 
   if (!results || results.length === 0) return null;
@@ -86,20 +70,13 @@ export default function ResultsViewer({ results, onResultUpdate }) {
           UPSC Document Index
         </h2>
         <div className="bg-indigo-600 px-3 py-1 rounded-full text-sm font-medium text-white shadow-lg">
-          {results.length} Indexed Topics
+          {results.length} Indexed Questions
         </div>
       </div>
 
       <div className="space-y-12">
-        {Object.entries(groupedResults).map(([subjectKey, items], index) => (
-          <div key={index} className="space-y-4">
-            <h3 className="text-xl font-semibold text-indigo-300 sticky top-0 bg-[#0f172a] py-2 z-10 flex items-center gap-2">
-               <span className="w-2 h-8 bg-indigo-500 rounded-full inline-block"></span>
-               {subjectKey} <span className="text-sm font-normal text-gray-500 ml-2">({items.length} questions)</span>
-            </h3>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {items.map((qa, idx) => {
+              {results.map((qa, idx) => {
                 const isEditing = editingId === qa._id && qa._id;
 
                 return (
@@ -128,52 +105,50 @@ export default function ResultsViewer({ results, onResultUpdate }) {
                     
                     <div className="mb-6 space-y-4">
                       {isEditing ? (
-                        <>
-                          <div>
-                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Subject</h4>
-                            <select
-                              value={editForm.subject}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
-                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
-                            >
-                              <option value="" disabled>Select Subject...</option>
-                              {subjectsOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                              {!subjectsOptions.includes(editForm.subject) && editForm.subject && (
-                                <option value={editForm.subject}>{editForm.subject}</option>
-                              )}
-                            </select>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Detailed Topic</h4>
-                            <select
-                              value={editForm.topic}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
-                              className="w-full bg-gray-900 border border-indigo-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
-                            >
-                              <option value="" disabled>Select Topic...</option>
-                              {topicsOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                              {!topicsOptions.includes(editForm.topic) && editForm.topic && (
-                                <option value={editForm.topic}>{editForm.topic}</option>
-                              )}
-                            </select>
-                          </div>
-                          <div className="flex gap-2 justify-end pt-2">
-                            <button
-                              onClick={handleCancelEdit}
-                              disabled={isSaving}
-                              className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                            >
-                              <X className="w-4 h-4" /> Cancel
-                            </button>
-                            <button
-                              onClick={() => handleSaveEdit(qa._id)}
-                              disabled={isSaving}
-                              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                            >
-                              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
-                            </button>
-                          </div>
-                        </>
+                        <div className="space-y-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Current Tags</label>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {editFormTags.map(t => (
+                                      <span key={t} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
+                                        {t} 
+                                        <button onClick={() => removeTagFromForm(t)} className="hover:text-white ml-1">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                      </span>
+                                  ))}
+                                  {editFormTags.length === 0 && <span className="text-xs text-gray-500">No tags added yet.</span>}
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    <select
+                                        value={newTagToAdd}
+                                        onChange={(e) => setNewTagToAdd(e.target.value)}
+                                        className="flex-1 bg-gray-800 border border-indigo-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
+                                    >
+                                        <option value="" disabled>Select a Tag to Add</option>
+                                        {validTags.filter(vt => !editFormTags.includes(vt)).map(vt => (
+                                            <option key={vt} value={vt}>{vt}</option>
+                                        ))}
+                                    </select>
+                                    <button 
+                                        onClick={addTagToForm}
+                                        disabled={!newTagToAdd}
+                                        className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 justify-end pt-3">
+                              <button onClick={handleCancelEdit} disabled={isSaving} className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+                                <X className="w-4 h-4" /> Cancel
+                              </button>
+                              <button onClick={() => handleSaveEdit(qa._id)} disabled={isSaving} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+                                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
+                              </button>
+                            </div>
+                        </div>
                       ) : (
                         <>
                           <div className="sm:hidden mb-2">
@@ -182,18 +157,23 @@ export default function ResultsViewer({ results, onResultUpdate }) {
                              </div>
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Subject</h4>
-                            <p className="text-indigo-200 text-sm font-medium">{qa.subject}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Detailed Topic</h4>
-                            <p className="text-gray-300 leading-relaxed font-light text-sm">{qa.topic}</p>
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Tags Classification</h4>
+                            <div className="flex flex-wrap gap-2">
+                               {qa.tags && qa.tags.length > 0 ? (
+                                   qa.tags.map((t, idx) => (
+                                      <span key={idx} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
+                                        {t}
+                                      </span>
+                                   ))
+                               ) : (
+                                   <span className="text-gray-500 text-xs italic">Uncategorized</span>
+                               )}
+                            </div>
                           </div>
                         </>
                       )}
                     </div>
 
-                    {/* Updated Button logic to use our new smart URL helper */}
                     {!isEditing && qa.file_url && (
                       <a 
                         href={getCleanUrl(qa.file_url)} 
@@ -208,8 +188,6 @@ export default function ResultsViewer({ results, onResultUpdate }) {
                 );
               })}
             </div>
-          </div>
-        ))}
       </div>
     </div>
   );

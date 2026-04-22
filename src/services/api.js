@@ -36,6 +36,16 @@ export const fetchQuestions = async () => {
   }
 };
 
+export const fetchTags = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/data/tags`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    throw error.response?.data || { error: 'Failed to retrieve tags from server.' };
+  }
+};
+
 export const updateQuestion = async (id, data) => {
   try {
     const response = await axios.put(`${API_BASE_URL}/api/data/questions/${id}`, data);

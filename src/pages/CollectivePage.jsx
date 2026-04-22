@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye } from 'lucide-react';
-import { getParsedSyllabus } from '../utils/upscSyllabus';
+import { fetchTags } from '../services/api';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function CollectivePage() {
-  const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [availableTags, setAvailableTags] = useState([]);
   
   // Phase handling
   const [isGenerating, setIsGenerating] = useState(false);
@@ -23,24 +24,16 @@ export default function CollectivePage() {
   // Final PDF View
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
 
-  const { subjects: rawSubjects } = useMemo(() => getParsedSyllabus(), []);
-  const subjects = useMemo(() => {
-    const cleaned = new Set();
-    rawSubjects.forEach(s => {
-      if (s !== 'All') {
-        const cleanName = s.replace(/\s*\(Paper [IV]+\)/i, '').trim();
-        cleaned.add(cleanName);
-      }
-    });
-    return Array.from(cleaned).sort();
-  }, [rawSubjects]);
+  useEffect(() => {
+     fetchTags().then(setAvailableTags).catch(console.error);
+  }, []);
 
   const handleFetchPreview = async () => {
-    if (!selectedSubject) return;
+    if (!selectedTag) return;
     setIsPreviewing(true);
     setPdfBlobUrl(null); // Reset preview on new fetch
     try {
-        const response = await fetch(`${API_BASE_URL}/api/collective/preview?subject=${encodeURIComponent(selectedSubject)}`);
+        const response = await fetch(`${API_BASE_URL}/api/collective/preview?tag=${encodeURIComponent(selectedTag)}`);
         
         if (!response.ok) {
             const errData = await response.json();
@@ -103,7 +96,7 @@ export default function CollectivePage() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                subject: selectedSubject,
+                tag: selectedTag,
                 selections: selections,
                 includedQuestionIds: Array.from(includedQuestions)
             })
@@ -129,7 +122,7 @@ export default function CollectivePage() {
       if (!pdfBlobUrl) return;
       const link = document.createElement('a');
       link.href = pdfBlobUrl;
-      link.download = `Formal_UPSC_Book_${selectedSubject.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+      link.download = `Formal_UPSC_Book_${selectedTag.replace(/[^a-z0-9]/gi, '_')}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -153,20 +146,20 @@ export default function CollectivePage() {
              </p>
 
              <div className="w-full text-left bg-gray-900/50 p-6 rounded-2xl border border-gray-700/50 mb-8">
-                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block tracking-wider">Select Target Subject</label>
+                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block tracking-wider">Select Target Tag</label>
                  <select 
                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 px-4 text-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer shadow-inner"
-                   value={selectedSubject}
-                   onChange={(e) => setSelectedSubject(e.target.value)}
+                   value={selectedTag}
+                   onChange={(e) => setSelectedTag(e.target.value)}
                  >
-                   <option value="" disabled>-- Choose a Subject --</option>
-                   {subjects.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                   <option value="" disabled>-- Choose a Tag --</option>
+                   {availableTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
                  </select>
              </div>
 
              <button
                onClick={handleFetchPreview}
-               disabled={!selectedSubject || isPreviewing || isGenerating}
+               disabled={!selectedTag || isPreviewing || isGenerating}
                className="w-full max-w-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-3 text-lg"
              >
                {isPreviewing || isGenerating ? (

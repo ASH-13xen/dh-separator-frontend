@@ -1,40 +1,34 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchQuestions, updateQuestion } from '../services/api';
-import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle, Edit2, Check, X } from 'lucide-react';
+import { fetchQuestions, updateQuestion, fetchTags } from '../services/api';
+import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle, Edit2, Check, X, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-import { getParsedSyllabus } from '../utils/upscSyllabus';
-
-// Setup your base API URL dynamically. 
-// Note: If using Create React App, use process.env.REACT_APP_API_BASE_URL
-// If using Vite, use import.meta.env.VITE_API_BASE_URL
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function ViewPage() {
   const [questions, setQuestions] = useState([]);
+  const [validTags, setValidTags] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Filtering States
-  const [selectedSubject, setSelectedSubject] = useState('All');
-  const [selectedTopic, setSelectedTopic] = useState('All');
+  const [selectedTag, setSelectedTag] = useState('All');
 
   // Editing States
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ subject: '', topic: '' });
+  const [editFormTags, setEditFormTags] = useState([]);
+  const [newTagToAdd, setNewTagToAdd] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-
-  // Hardcoded parsed lists combined with dynamic db lists
-  const { subjects: rawSubjects, topicsBySub: rawTopicsBySub } = useMemo(() => getParsedSyllabus(), []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await fetchQuestions();
-        setQuestions(data);
+        const [qData, tData] = await Promise.all([fetchQuestions(), fetchTags()]);
+        setQuestions(qData);
+        setValidTags(tData);
       } catch (err) {
-        setError(err.error || "Failed to load document library.");
+        setError(err.error || "Failed to load document library or tags.");
       } finally {
         setIsLoading(false);
       }
@@ -42,78 +36,36 @@ export default function ViewPage() {
     loadData();
   }, []);
 
-  // Compute unique filters merging DB with Syllabus (Cleaning "Paper I/II" variations)
-  const subjects = useMemo(() => {
-    const dbSubs = new Set(questions.map((q) => q.subject).filter(Boolean));
-    
-    rawSubjects.forEach(s => { 
-      if (s !== 'All') {
-        const cleanName = s.replace(/\s*\(Paper [IV]+\)/i, '').trim();
-        dbSubs.add(cleanName);
-      }
-    }); 
-    
-    return ['All', ...Array.from(dbSubs).sort()];
-  }, [questions, rawSubjects]);
+  const filterTagsList = useMemo(() => {
+      const qsTags = new Set();
+      questions.forEach(q => {
+          if (q.tags) q.tags.forEach(t => qsTags.add(t));
+      });
+      return ['All', ...Array.from(qsTags).sort()];
+  }, [questions]);
 
-  const topics = useMemo(() => {
-    const filteredBySub = selectedSubject === 'All' 
-        ? questions 
-        : questions.filter(q => q.subject === selectedSubject);
-    
-    const dbTops = new Set(filteredBySub.map((q) => q.topic).filter(Boolean));
-    
-    if (selectedSubject === 'All') {
-       Object.values(rawTopicsBySub).flat().forEach(t => dbTops.add(t));
-    } else {
-       const matchingRawSubjectKeys = Object.keys(rawTopicsBySub).filter(k => {
-         const cleanKey = k.replace(/\s*\(Paper [IV]+\)/i, '').trim();
-         return cleanKey === selectedSubject || cleanKey.includes(selectedSubject) || selectedSubject.includes(cleanKey);
-       });
-       
-       matchingRawSubjectKeys.forEach(k => {
-           rawTopicsBySub[k].forEach(t => dbTops.add(t));
-       });
-    }
-
-    return ['All', ...Array.from(dbTops).sort()];
-  }, [questions, selectedSubject, rawTopicsBySub]);
-
-  // Reset topic filter if subject changes and topic is no longer valid
-  useEffect(() => {
-    if (!topics.includes(selectedTopic)) {
-      setSelectedTopic('All');
-    }
-  }, [topics, selectedTopic]);
-
-  // Apply filters to data rendering
   const displayedQuestions = useMemo(() => {
     return questions.filter((q) => {
-      const matchSubject = selectedSubject === 'All' || q.subject === selectedSubject;
-      const matchTopic = selectedTopic === 'All' || q.topic === selectedTopic;
-      return matchSubject && matchTopic;
+      if (selectedTag === 'All') return true;
+      return q.tags && q.tags.includes(selectedTag);
     });
-  }, [questions, selectedSubject, selectedTopic]);
+  }, [questions, selectedTag]);
 
   const handleDownloadPdf = () => {
     if (displayedQuestions.length === 0) return;
     
     const doc = new jsPDF();
     doc.setFontSize(18);
-    const title = selectedSubject === 'All' ? 'UPSC Comprehensive Document Index' : `UPSC Index - ${selectedSubject}`;
+    const title = selectedTag === 'All' ? 'UPSC Comprehensive Document Index' : `UPSC Index - ${selectedTag}`;
     doc.text(title, 14, 22);
     
     doc.setFontSize(11);
-    doc.text(`Topic Filter: ${selectedTopic}`, 14, 30);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 36);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
 
     const tableData = displayedQuestions.map((item, index) => {
       const pdfs = item.file_urls || [];
-      
-      const linksText = pdfs.map((fileObj, i) => {
-        const urlToParse = fileObj.url || '';
-        let cleanUrl = urlToParse.replace('https//', 'https://').replace('http//', 'http://');
-
+      const linksText = pdfs.map((fileObj) => {
+        let cleanUrl = (fileObj.url || '').replace('https//', 'https://').replace('http//', 'http://');
         if (!cleanUrl.startsWith('http')) {
           const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
           cleanUrl = `${baseUrl}${cleanUrl}`;
@@ -124,45 +76,47 @@ export default function ViewPage() {
       return [
         index + 1,
         item.question_text || '-',
+        (item.tags || []).join(', '),
         linksText || 'No files'
       ];
     });
 
     autoTable(doc, {
-      startY: 42,
-      head: [['#', 'Question', 'Extracted Files']],
+      startY: 38,
+      head: [['#', 'Question', 'Tags', 'Extracted Files']],
       body: tableData,
       theme: 'striped',
       headStyles: { fillColor: [79, 70, 229] },
-      styles: { fontSize: 10, cellPadding: 4, overflow: 'linebreak' },
+      styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 10 },
-        1: { cellWidth: 100 },
-        2: { cellWidth: 'auto' },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 'auto' },
       },
     });
 
-    const filenameSub = selectedSubject === 'All' ? 'Complete_Library' : selectedSubject.replace(/[^a-z0-9]/gi, '_');
-    const filenameTop = selectedTopic === 'All' ? '' : `_${selectedTopic.replace(/[^a-z0-9]/gi, '_')}`;
-    
-    doc.save(`UPSC_Filtered_${filenameSub}${filenameTop}.pdf`);
+    const filenameTag = selectedTag === 'All' ? 'Complete_Library' : selectedTag.replace(/[^a-z0-9]/gi, '_');
+    doc.save(`UPSC_Filtered_${filenameTag}.pdf`);
   };
 
   const handleEditClick = (qa) => {
     setEditingId(qa._id);
-    setEditForm({ subject: qa.subject || '', topic: qa.topic || '' });
+    setEditFormTags(qa.tags || []);
+    setNewTagToAdd('');
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditForm({ subject: '', topic: '' });
+    setEditFormTags([]);
+    setNewTagToAdd('');
   };
 
   const handleSaveEdit = async (id) => {
     if (!id) return;
     setIsSaving(true);
     try {
-      const updated = await updateQuestion(id, editForm);
+      const updated = await updateQuestion(id, { tags: editFormTags });
       setQuestions(prev => prev.map(q => q._id === id ? updated : q));
       setEditingId(null);
     } catch (err) {
@@ -170,6 +124,17 @@ export default function ViewPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const addTagToForm = () => {
+    if (newTagToAdd && !editFormTags.includes(newTagToAdd)) {
+        setEditFormTags([...editFormTags, newTagToAdd]);
+        setNewTagToAdd('');
+    }
+  };
+
+  const removeTagFromForm = (tagToRemove) => {
+      setEditFormTags(editFormTags.filter(t => t !== tagToRemove));
   };
 
 
@@ -201,7 +166,7 @@ export default function ViewPage() {
           Library Viewer
         </h1>
         <p className="text-lg text-gray-400 max-w-2xl leading-relaxed">
-          Browse, filter, and export the processed UPSC dataset. Duplicate instances of the same question automatically merge their extracted answers below.
+          Browse, filter, and export the processed UPSC dataset using dynamic tags. Duplicate instances of the same question automatically merge their extracted answers below.
         </p>
       </header>
 
@@ -213,24 +178,13 @@ export default function ViewPage() {
             </div>
 
             <div className="flex-1 w-full relative">
-              <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Subject</label>
+              <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filter By Tag</label>
               <select 
                 className="w-full bg-gray-900 border border-gray-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
+                value={selectedTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
               >
-                {subjects.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-              </select>
-            </div>
-
-            <div className="flex-1 w-full relative">
-              <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Topic</label>
-              <select 
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-                value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
-              >
-                {topics.map(top => <option key={top} value={top}>{top}</option>)}
+                {filterTagsList.map(tag => <option key={tag} value={tag}>{tag}</option>)}
               </select>
             </div>
 
@@ -276,47 +230,41 @@ export default function ViewPage() {
                        <div className="flex flex-col gap-3 mb-4">
                          {isEditing ? (
                              <div className="space-y-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-                               <div>
-                                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Subject</label>
-                                 <select
-                                   value={editForm.subject}
-                                   onChange={(e) => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
-                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
-                                 >
-                                   <option value="" disabled>Select a Subject</option>
-                                   {subjects.filter(s => s !== 'All').map(sub => (
-                                     <option key={sub} value={sub}>{sub}</option>
-                                   ))}
-                                   {/* Ensure current subject is in list even if not in preexisting DB */}
-                                   {!subjects.includes(editForm.subject) && editForm.subject && (
-                                     <option value={editForm.subject}>{editForm.subject}</option>
-                                   )}
-                                 </select>
-                               </div>
-                               <div>
-                                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Topic</label>
-                                 <select
-                                   value={editForm.topic}
-                                   onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
-                                   className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
-                                 >
-                                   <option value="" disabled>Select a Topic</option>
-                                   {/* We use the preexisting `topics` minus 'All'. 
-                                      If the user changes subject, `topics` from useMemo might be constrained if they have a filter active, 
-                                      so we will just render all globally known topics from rawTopicsBySub and questions */}
-                                   {Array.from(new Set([
-                                     ...Object.values(rawTopicsBySub).flat(),
-                                     ...questions.map(q => q.topic).filter(Boolean)
-                                   ])).sort().map(top => (
-                                     <option key={top} value={top}>{top}</option>
-                                   ))}
-                                   {/* Ensure current topic is always selectable */}
-                                   {!Array.from(new Set([...Object.values(rawTopicsBySub).flat(), ...questions.map(q => q.topic).filter(Boolean)])).includes(editForm.topic) && editForm.topic && (
-                                     <option value={editForm.topic}>{editForm.topic}</option>
-                                   )}
-                                 </select>
-                               </div>
-                               <div className="flex gap-2 justify-end pt-2">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Current Tags</label>
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                      {editFormTags.map(t => (
+                                          <span key={t} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
+                                            {t} 
+                                            <button onClick={() => removeTagFromForm(t)} className="hover:text-white ml-1">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                      ))}
+                                      {editFormTags.length === 0 && <span className="text-xs text-gray-500">No tags added yet.</span>}
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={newTagToAdd}
+                                            onChange={(e) => setNewTagToAdd(e.target.value)}
+                                            className="flex-1 bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="" disabled>Select a Tag to Add</option>
+                                            {validTags.filter(vt => !editFormTags.includes(vt)).map(vt => (
+                                                <option key={vt} value={vt}>{vt}</option>
+                                            ))}
+                                        </select>
+                                        <button 
+                                            onClick={addTagToForm}
+                                            disabled={!newTagToAdd}
+                                            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1"
+                                        >
+                                            <Plus className="w-4 h-4" /> Add
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 justify-end pt-3">
                                  <button onClick={handleCancelEdit} disabled={isSaving} className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
                                    <X className="w-4 h-4" /> Cancel
                                  </button>
@@ -327,12 +275,15 @@ export default function ViewPage() {
                              </div>
                          ) : (
                              <div className="flex flex-wrap gap-2">
-                               <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-                                 {qa.subject}
-                               </span>
-                               <span className="bg-gray-700/50 text-gray-300 px-3 py-1 rounded-full text-xs border border-gray-600">
-                                 {qa.topic}
-                               </span>
+                               {qa.tags && qa.tags.length > 0 ? (
+                                   qa.tags.map((t, idx) => (
+                                      <span key={idx} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
+                                        {t}
+                                      </span>
+                                   ))
+                               ) : (
+                                   <span className="text-gray-500 text-xs italic">Uncategorized</span>
+                               )}
                              </div>
                          )}
                        </div>
