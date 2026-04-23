@@ -367,18 +367,55 @@ export default function ViewPage() {
                                         <label className="text-xs text-gray-500 uppercase mb-2 block">Extracted Toppers</label>
                                         {editFileUrls.length === 0 && <span className="text-xs text-gray-600">No topper files associated.</span>}
                                         {editFileUrls.map((fileObj, idx) => (
-                                            <div key={idx} className="flex gap-2 mb-2 items-center">
-                                                <input 
-                                                    type="text" 
-                                                    value={fileObj.topper_name || ''}
-                                                    onChange={(e) => {
-                                                        const newUrls = [...editFileUrls];
-                                                        newUrls[idx].topper_name = e.target.value;
-                                                        setEditFileUrls(newUrls);
-                                                    }}
-                                                    className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
-                                                    placeholder="Topper Name"
-                                                />
+                                            <div key={idx} className="bg-gray-900 p-3 rounded-lg border border-gray-700/50 mb-3">
+                                                <div className="mb-2">
+                                                    <input 
+                                                        type="text" 
+                                                        value={fileObj.topper_name || ''}
+                                                        onChange={(e) => {
+                                                            const newUrls = [...editFileUrls];
+                                                            newUrls[idx].topper_name = e.target.value;
+                                                            setEditFileUrls(newUrls);
+                                                        }}
+                                                        className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
+                                                        placeholder="Topper Name"
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <input 
+                                                        type="text" 
+                                                        value={fileObj.topper_year || ''}
+                                                        onChange={(e) => {
+                                                            const newUrls = [...editFileUrls];
+                                                            newUrls[idx].topper_year = e.target.value;
+                                                            setEditFileUrls(newUrls);
+                                                        }}
+                                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg py-1 px-2 text-white text-xs focus:outline-none focus:border-teal-400"
+                                                        placeholder="Year"
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        value={fileObj.topper_rank || ''}
+                                                        onChange={(e) => {
+                                                            const newUrls = [...editFileUrls];
+                                                            newUrls[idx].topper_rank = e.target.value;
+                                                            setEditFileUrls(newUrls);
+                                                        }}
+                                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg py-1 px-2 text-white text-xs focus:outline-none focus:border-teal-400"
+                                                        placeholder="Rank"
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        value={fileObj.topper_marks || ''}
+                                                        onChange={(e) => {
+                                                            const newUrls = [...editFileUrls];
+                                                            newUrls[idx].topper_marks = e.target.value;
+                                                            setEditFileUrls(newUrls);
+                                                        }}
+                                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg py-1 px-2 text-white text-xs focus:outline-none focus:border-teal-400"
+                                                        placeholder="Marks"
+                                                    />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -432,8 +469,12 @@ export default function ViewPage() {
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-between gap-3 w-full bg-gray-800 hover:bg-teal-600 text-gray-200 hover:text-white px-4 py-3 rounded-lg transition-colors border border-gray-700 hover:border-teal-500 cursor-pointer"
                                 >
-                                  <span className="flex items-center gap-2 font-medium text-sm">
-                                    <FileText className="w-4 h-4 text-teal-400" /> {fileObj.topper_name || 'Unknown Topper'}
+                                  <span className="flex items-center gap-2 font-medium text-sm flex-wrap">
+                                    <FileText className="w-4 h-4 text-teal-400" /> 
+                                    <span className="font-bold">{fileObj.topper_name || 'Unknown Topper'}</span>
+                                    {fileObj.topper_year && <span className="text-xs text-gray-400">| {fileObj.topper_year}</span>}
+                                    {fileObj.topper_rank && <span className="text-xs text-teal-200">| Rank: {fileObj.topper_rank}</span>}
+                                    {fileObj.topper_marks && <span className="text-xs text-teal-200">| Marks: {fileObj.topper_marks}</span>}
                                   </span>
                                   <span className="text-xs opacity-50 bg-black/20 px-2 py-1 rounded">View PDF</span>
                                 </a>

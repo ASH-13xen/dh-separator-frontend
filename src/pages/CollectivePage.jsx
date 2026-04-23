@@ -374,7 +374,7 @@ export default function CollectivePage() {
                       </button>
                   </div>
                   <div className="flex-1 overflow-hidden">
-                      <iframe src={previewPdfUrl} className="w-full h-full border-0" title="Answer Preview" />
+                      <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewPdfUrl)}&embedded=true`} className="w-full h-full border-0" title="Answer Preview" />
                   </div>
               </div>
           </div>

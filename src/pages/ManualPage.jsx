@@ -12,6 +12,9 @@ export default function ManualPage() {
   const [selectedTopic, setSelectedTopic] = useState('');
   const [selectedOptional, setSelectedOptional] = useState('');
   const [topperName, setTopperName] = useState('');
+  const [topperYear, setTopperYear] = useState('');
+  const [topperRank, setTopperRank] = useState('');
+  const [topperMarks, setTopperMarks] = useState('');
   const [file, setFile] = useState(null);
   
   const [isUploading, setIsUploading] = useState(false);
@@ -44,6 +47,9 @@ export default function ManualPage() {
     setSelectedTopic('');
     setSelectedOptional('');
     setTopperName('');
+    setTopperYear('');
+    setTopperRank('');
+    setTopperMarks('');
     setFile(null);
     setSuccessMsg('');
     setErrorMsg('');
@@ -66,6 +72,9 @@ export default function ManualPage() {
     formData.append('pdf', file);
     formData.append('question_text', questionText);
     formData.append('topper_name', topperName || 'Unknown Topper');
+    formData.append('topper_year', topperYear);
+    formData.append('topper_rank', topperRank);
+    formData.append('topper_marks', topperMarks);
     formData.append('tags', JSON.stringify(tags));
 
     try {
@@ -219,16 +228,51 @@ export default function ManualPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Topper Name */}
-                <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Topper Name</label>
-                    <input 
-                        type="text"
-                        value={topperName}
-                        onChange={(e) => setTopperName(e.target.value)}
-                        placeholder="e.g. Shruti Sharma"
-                        className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner"
-                    />
+                {/* Topper Details */}
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Topper Name</label>
+                        <input 
+                            type="text"
+                            value={topperName}
+                            onChange={(e) => setTopperName(e.target.value)}
+                            placeholder="e.g. Shruti Sharma"
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner"
+                        />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Year</label>
+                            <input 
+                                type="text"
+                                value={topperYear}
+                                onChange={(e) => setTopperYear(e.target.value)}
+                                placeholder="e.g. 2021"
+                                className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-2 px-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner text-sm"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Rank</label>
+                            <input 
+                                type="text"
+                                value={topperRank}
+                                onChange={(e) => setTopperRank(e.target.value)}
+                                placeholder="e.g. AIR 1"
+                                className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-2 px-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner text-sm"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Marks</label>
+                            <input 
+                                type="text"
+                                value={topperMarks}
+                                onChange={(e) => setTopperMarks(e.target.value)}
+                                placeholder="e.g. 1050"
+                                className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-2 px-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner text-sm"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* PDF File Upload */}
