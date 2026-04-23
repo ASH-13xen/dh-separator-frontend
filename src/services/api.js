@@ -46,6 +46,16 @@ export const fetchTags = async () => {
   }
 };
 
+export const fetchHierarchy = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/data/hierarchy`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching hierarchy:", error);
+    throw error.response?.data || { error: 'Failed to retrieve hierarchy from server.' };
+  }
+};
+
 export const updateQuestion = async (id, data) => {
   try {
     const response = await axios.put(`${API_BASE_URL}/api/data/questions/${id}`, data);

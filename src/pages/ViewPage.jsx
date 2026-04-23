@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchQuestions, updateQuestion, fetchTags } from '../services/api';
-import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle, Edit2, Check, X, Plus } from 'lucide-react';
+import { fetchQuestions, updateQuestion, fetchTags, fetchHierarchy } from '../services/api';
+import { FileQuestion, FileText, Download, Filter, Loader2, AlertTriangle, Edit2, Check, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -9,6 +9,7 @@ const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:500
 export default function ViewPage() {
   const [questions, setQuestions] = useState([]);
   const [validTags, setValidTags] = useState([]);
+  const [hierarchyData, setHierarchyData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -17,16 +18,19 @@ export default function ViewPage() {
 
   // Editing States
   const [editingId, setEditingId] = useState(null);
-  const [editFormTags, setEditFormTags] = useState([]);
-  const [newTagToAdd, setNewTagToAdd] = useState('');
+  const [editModule, setEditModule] = useState('');
+  const [editSection, setEditSection] = useState('');
+  const [editTopic, setEditTopic] = useState('');
+  const [editOptional, setEditOptional] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [qData, tData] = await Promise.all([fetchQuestions(), fetchTags()]);
+        const [qData, tData, hData] = await Promise.all([fetchQuestions(), fetchTags(), fetchHierarchy()]);
         setQuestions(qData);
         setValidTags(tData);
+        setHierarchyData(hData);
       } catch (err) {
         setError(err.error || "Failed to load document library or tags.");
       } finally {
@@ -102,21 +106,73 @@ export default function ViewPage() {
 
   const handleEditClick = (qa) => {
     setEditingId(qa._id);
-    setEditFormTags(qa.tags || []);
-    setNewTagToAdd('');
+    
+    // Reverse engineer current tags based on hierarchy
+    let foundMod = '';
+    let foundSec = '';
+    let foundTop = '';
+    let foundOpt = '';
+    
+    const tags = qa.tags || [];
+    
+    if (hierarchyData) {
+        // Find GS Module
+        for (const mod of Object.keys(hierarchyData.gsModules)) {
+            if (tags.includes(mod)) {
+                foundMod = mod;
+                break;
+            }
+        }
+        
+        if (foundMod) {
+            const sections = hierarchyData.gsModules[foundMod];
+            for (const secObj of sections) {
+                // If the section text is a tag, set it. 
+                // Alternatively, just search topics. If we find a topic, its parent is the section.
+                let topicMatch = false;
+                if (secObj.topics) {
+                    for (const t of secObj.topics) {
+                        if (tags.includes(t.title)) {
+                            foundSec = secObj.section;
+                            foundTop = t.title;
+                            topicMatch = true;
+                            break;
+                        }
+                    }
+                }
+                if (topicMatch) break;
+            }
+        }
+        
+        // Find Optional
+        for (const opt of hierarchyData.optionalSubjects) {
+            if (tags.includes(opt)) {
+                foundOpt = opt;
+                break;
+            }
+        }
+    }
+    
+    setEditModule(foundMod);
+    setEditSection(foundSec);
+    setEditTopic(foundTop);
+    setEditOptional(foundOpt);
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditFormTags([]);
-    setNewTagToAdd('');
+    setEditModule('');
+    setEditSection('');
+    setEditTopic('');
+    setEditOptional('');
   };
 
   const handleSaveEdit = async (id) => {
     if (!id) return;
     setIsSaving(true);
     try {
-      const updated = await updateQuestion(id, { tags: editFormTags });
+      const newTags = [editModule, editSection, editTopic, editOptional].filter(Boolean);
+      const updated = await updateQuestion(id, { tags: newTags });
       setQuestions(prev => prev.map(q => q._id === id ? updated : q));
       setEditingId(null);
     } catch (err) {
@@ -125,18 +181,6 @@ export default function ViewPage() {
       setIsSaving(false);
     }
   };
-
-  const addTagToForm = () => {
-    if (newTagToAdd && !editFormTags.includes(newTagToAdd)) {
-        setEditFormTags([...editFormTags, newTagToAdd]);
-        setNewTagToAdd('');
-    }
-  };
-
-  const removeTagFromForm = (tagToRemove) => {
-      setEditFormTags(editFormTags.filter(t => t !== tagToRemove));
-  };
-
 
   if (isLoading) {
     return (
@@ -156,6 +200,17 @@ export default function ViewPage() {
           </div>
       </div>
     );
+  }
+
+  // Derive Dropdown Options dynamically while editing
+  let availableSections = [];
+  let availableTopics = [];
+  if (editModule && hierarchyData.gsModules[editModule]) {
+      availableSections = hierarchyData.gsModules[editModule];
+      const secObj = availableSections.find(s => s.section === editSection);
+      if (secObj && secObj.topics) {
+          availableTopics = secObj.topics;
+      }
   }
 
   return (
@@ -229,42 +284,83 @@ export default function ViewPage() {
                    <div className="flex-1 pr-8">
                        <div className="flex flex-col gap-3 mb-4">
                          {isEditing ? (
-                             <div className="space-y-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Current Tags</label>
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                      {editFormTags.map(t => (
-                                          <span key={t} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
-                                            {t} 
-                                            <button onClick={() => removeTagFromForm(t)} className="hover:text-white ml-1">
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                          </span>
-                                      ))}
-                                      {editFormTags.length === 0 && <span className="text-xs text-gray-500">No tags added yet.</span>}
-                                    </div>
-                                    
-                                    <div className="flex gap-2">
+                             <div className="space-y-4 bg-gray-900/50 p-5 rounded-xl border border-gray-700">
+                                <h4 className="text-xs font-bold text-indigo-400 uppercase">Edit Hierarchical Classification</h4>
+                                
+                                <div className="grid grid-cols-1 gap-4">
+                                    {/* Module Dropdown */}
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">GS Module</label>
                                         <select
-                                            value={newTagToAdd}
-                                            onChange={(e) => setNewTagToAdd(e.target.value)}
-                                            className="flex-1 bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                            value={editModule}
+                                            onChange={(e) => {
+                                                setEditModule(e.target.value);
+                                                setEditSection('');
+                                                setEditTopic('');
+                                            }}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
                                         >
-                                            <option value="" disabled>Select a Tag to Add</option>
-                                            {validTags.filter(vt => !editFormTags.includes(vt)).map(vt => (
-                                                <option key={vt} value={vt}>{vt}</option>
+                                            <option value="">-- None --</option>
+                                            {hierarchyData && Object.keys(hierarchyData.gsModules).sort().map(mod => (
+                                                <option key={mod} value={mod}>{mod}</option>
                                             ))}
                                         </select>
-                                        <button 
-                                            onClick={addTagToForm}
-                                            disabled={!newTagToAdd}
-                                            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1"
+                                    </div>
+                                    
+                                    {/* Section Dropdown */}
+                                    {editModule && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Section</label>
+                                        <select
+                                            value={editSection}
+                                            onChange={(e) => {
+                                                setEditSection(e.target.value);
+                                                setEditTopic('');
+                                            }}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
                                         >
-                                            <Plus className="w-4 h-4" /> Add
-                                        </button>
+                                            <option value="">-- None --</option>
+                                            {availableSections.map((sec, i) => (
+                                                <option key={i} value={sec.section}>{sec.section.substring(0, 80)}...</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    )}
+
+                                    {/* Topic Dropdown */}
+                                    {editSection && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Topic</label>
+                                        <select
+                                            value={editTopic}
+                                            onChange={(e) => setEditTopic(e.target.value)}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="">-- None --</option>
+                                            {availableTopics.map((top, i) => (
+                                                <option key={i} value={top.title}>{top.title.substring(0, 80)}...</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    )}
+
+                                    {/* Optional Subject */}
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Subject (Additional)</label>
+                                        <select
+                                            value={editOptional}
+                                            onChange={(e) => setEditOptional(e.target.value)}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="">-- None --</option>
+                                            {hierarchyData && hierarchyData.optionalSubjects.map(sub => (
+                                                <option key={sub} value={sub}>{sub.replace('OptionalSubject', '')}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
-                                <div className="flex gap-2 justify-end pt-3">
+
+                                <div className="flex gap-2 justify-end pt-3 border-t border-gray-700/50 mt-2">
                                  <button onClick={handleCancelEdit} disabled={isSaving} className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50">
                                    <X className="w-4 h-4" /> Cancel
                                  </button>
@@ -278,7 +374,7 @@ export default function ViewPage() {
                                {qa.tags && qa.tags.length > 0 ? (
                                    qa.tags.map((t, idx) => (
                                       <span key={idx} className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-                                        {t}
+                                        {t.length > 45 ? t.substring(0,45) + '...' : t}
                                       </span>
                                    ))
                                ) : (

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye } from 'lucide-react';
+import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye, FileText } from 'lucide-react';
 import { fetchTags } from '../services/api';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function CollectivePage() {
-  const [selectedTag, setSelectedTag] = useState('');
-  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedModule, setSelectedModule] = useState('');
+  const [availableModules, setAvailableModules] = useState([]);
   
   // Phase handling
   const [isGenerating, setIsGenerating] = useState(false);
@@ -14,7 +14,7 @@ export default function CollectivePage() {
   const [showModal, setShowModal] = useState(false);
   
   // Data tracking
-  const [previewData, setPreviewData] = useState([]);
+  const [previewData, setPreviewData] = useState([]); // This is now hierarchical
   
   // Selections Object: { question_id: 'file_url' }
   const [selections, setSelections] = useState({});
@@ -25,31 +25,41 @@ export default function CollectivePage() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
 
   useEffect(() => {
-     fetchTags().then(setAvailableTags).catch(console.error);
+     fetchTags().then(tags => {
+         // Filter tags to only show Top-Level Modules (GS and Optionals)
+         const modules = tags.filter(t => t.startsWith('GS-') || t.startsWith('OptionalSubject'));
+         setAvailableModules(modules.sort());
+     }).catch(console.error);
   }, []);
 
   const handleFetchPreview = async () => {
-    if (!selectedTag) return;
+    if (!selectedModule) return;
     setIsPreviewing(true);
     setPdfBlobUrl(null); // Reset preview on new fetch
     try {
-        const response = await fetch(`${API_BASE_URL}/api/collective/preview?tag=${encodeURIComponent(selectedTag)}`);
+        const response = await fetch(`${API_BASE_URL}/api/collective/preview?moduleName=${encodeURIComponent(selectedModule)}`);
         
         if (!response.ok) {
             const errData = await response.json();
-            throw new Error(errData.error || 'Failed to fetch subject format.');
+            throw new Error(errData.error || 'Failed to fetch module layout.');
         }
 
         const data = await response.json();
-        setPreviewData(data);
+        setPreviewData(data); // hierarchical data
 
         const initSelects = {};
         const initIncluded = new Set();
-        data.forEach(q => {
-            initIncluded.add(q._id);
-            if (q.file_urls && q.file_urls.length > 0) {
-                initSelects[q._id] = q.file_urls[0].url;
-            }
+        
+        // Traverse the hierarchy to initialize states
+        data.forEach(sec => {
+            sec.topics.forEach(top => {
+                top.questions.forEach(q => {
+                    initIncluded.add(q._id);
+                    if (q.file_urls && q.file_urls.length > 0) {
+                        initSelects[q._id] = q.file_urls[0].url;
+                    }
+                });
+            });
         });
 
         setSelections(initSelects);
@@ -79,24 +89,28 @@ export default function CollectivePage() {
   };
 
   const handleSelectAllToggle = () => {
-      if (includedQuestions.size === previewData.length) {
+      let totalQ = 0;
+      previewData.forEach(s => s.topics.forEach(t => { totalQ += t.questions.length; }));
+      
+      if (includedQuestions.size === totalQ && totalQ > 0) {
           setIncludedQuestions(new Set()); // Deselect all
       } else {
-          setIncludedQuestions(new Set(previewData.map(q => q._id))); // Select all
+          const allIds = new Set();
+          previewData.forEach(s => s.topics.forEach(t => t.questions.forEach(q => allIds.add(q._id))));
+          setIncludedQuestions(allIds);
       }
   };
 
   const generateAndPreviewPdf = async () => {
     setIsGenerating(true);
     try {
-        // Send POST Data via Fetch
         const response = await fetch(`${API_BASE_URL}/api/collective/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                tag: selectedTag,
+                moduleName: selectedModule,
                 selections: selections,
                 includedQuestionIds: Array.from(includedQuestions)
             })
@@ -122,50 +136,59 @@ export default function CollectivePage() {
       if (!pdfBlobUrl) return;
       const link = document.createElement('a');
       link.href = pdfBlobUrl;
-      link.download = `Formal_UPSC_Book_${selectedTag.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+      link.download = `Formal_UPSC_Book_${selectedModule.replace(/[^a-z0-9]/gi, '_')}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
   };
 
-  const isAllSelected = includedQuestions.size === previewData.length && previewData.length > 0;
+  const getCleanUrl = (url) => {
+    if (!url) return '#';
+    let cleanUrl = url.replace('https//', 'https://').replace('http//', 'http://');
+    if (cleanUrl.startsWith('http')) return cleanUrl;
+    return `${API_BASE_URL}${cleanUrl}`;
+  };
+
+  let totalQuestionsCount = 0;
+  previewData.forEach(s => s.topics.forEach(t => { totalQuestionsCount += t.questions.length; }));
+  
+  const isAllSelected = includedQuestions.size === totalQuestionsCount && totalQuestionsCount > 0;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-12 font-sans overflow-x-hidden flex flex-col items-center justify-center relative">
       
-      {/* Background Main Overlay */}
       <div className={`max-w-2xl w-full bg-gray-800/50 border border-gray-700 p-10 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 backdrop-blur-sm transition-all ${showModal ? 'opacity-20 blur-sm pointer-events-none' : ''}`}>
          <div className="flex flex-col items-center text-center">
              <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg mb-6 shadow-indigo-500/20">
                  <BookOpen className="w-10 h-10 text-white" />
              </div>
-             <h1 className="text-3xl font-bold text-white mb-3 tracking-wide">Publish Book</h1>
+             <h1 className="text-3xl font-bold text-white mb-3 tracking-wide">Publish Module Book</h1>
              <p className="text-gray-400 mb-8 max-w-lg">
-                Compile massive structured documents perfectly aligned to your Subject. 
+                Compile massive structured documents perfectly aligned to your Target Module. 
                 Our engine draws formal Topic Separators, builds an interactive Index Segment, and stitches answers cleanly.
              </p>
 
              <div className="w-full text-left bg-gray-900/50 p-6 rounded-2xl border border-gray-700/50 mb-8">
-                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block tracking-wider">Select Target Tag</label>
+                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block tracking-wider">Select Target Module</label>
                  <select 
                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 px-4 text-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer shadow-inner"
-                   value={selectedTag}
-                   onChange={(e) => setSelectedTag(e.target.value)}
+                   value={selectedModule}
+                   onChange={(e) => setSelectedModule(e.target.value)}
                  >
-                   <option value="" disabled>-- Choose a Tag --</option>
-                   {availableTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                   <option value="" disabled>-- Choose a Module --</option>
+                   {availableModules.map(mod => <option key={mod} value={mod}>{mod.replace(/([a-z])([A-Z])/g, '$1 $2')}</option>)}
                  </select>
              </div>
 
              <button
                onClick={handleFetchPreview}
-               disabled={!selectedTag || isPreviewing || isGenerating}
+               disabled={!selectedModule || isPreviewing || isGenerating}
                className="w-full max-w-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-3 text-lg"
              >
                {isPreviewing || isGenerating ? (
                  <>
                    <Loader2 className="w-6 h-6 animate-spin" />
-                   {isGenerating ? "Assembling Book..." : "Scanning Database..."}
+                   {isGenerating ? "Assembling Book..." : "Fetching Hierarchy..."}
                  </>
                ) : (
                  <>
@@ -180,7 +203,6 @@ export default function CollectivePage() {
          </div>
       </div>
 
-      {/* Interactive Selection Modal */}
       {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!isGenerating) setShowModal(false) }} />
@@ -188,7 +210,6 @@ export default function CollectivePage() {
               <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 overflow-hidden">
                   
                   {pdfBlobUrl ? (
-                      // ---------------- PDF PREVIEW MODE ----------------
                       <>
                           <div className="p-4 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between">
                               <div>
@@ -221,13 +242,12 @@ export default function CollectivePage() {
                           </div>
                       </>
                   ) : (
-                      // ---------------- QUESTION SELECTION MODE ----------------
                       <>
                           <div className="p-6 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between gap-4">
                               <div>
-                                  <h2 className="text-xl font-bold text-white mb-1">Assemble Questions</h2>
+                                  <h2 className="text-xl font-bold text-white mb-1">Assemble Sequence</h2>
                                   <p className="text-sm text-gray-400">
-                                      Select the questions to include. If multiple answers exist, pick your preferred topper.
+                                      Select topper answers mapped to {selectedModule} sections and topics.
                                   </p>
                               </div>
                               <button 
@@ -239,56 +259,87 @@ export default function CollectivePage() {
                               </button>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-900/50">
-                              {previewData.map((q, qIndex) => {
-                                  const isIncluded = includedQuestions.has(q._id);
-                                  
-                                  return (
-                                  <div key={q._id} className={`rounded-xl p-5 border transition-colors ${isIncluded ? 'bg-gray-800 border-indigo-500/50' : 'bg-gray-800/40 border-gray-700 opacity-60'}`}>
-                                      <div className="flex items-start gap-4 mb-4">
-                                          <button onClick={() => toggleIncludeQuestion(q._id)} className="mt-1 flex-shrink-0">
-                                              {isIncluded ? <CheckSquare className="w-6 h-6 text-indigo-500"/> : <Square className="w-6 h-6 text-gray-500" />}
-                                          </button>
-                                          <div>
-                                              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-1">Question {qIndex + 1} | {q.topic}</h3>
-                                              <p className="text-white text-lg font-medium leading-snug">{q.question_text}</p>
-                                          </div>
+                          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-900/50">
+                              {previewData.length === 0 && (
+                                  <div className="text-center text-gray-400 py-10">No questions mapped for this module.</div>
+                              )}
+                              
+                              {previewData.map((secNode, sIndex) => (
+                                  <div key={sIndex} className="bg-gray-800/30 border border-gray-700/60 rounded-2xl overflow-hidden">
+                                      <div className="bg-gradient-to-r from-gray-800 to-gray-800/40 px-6 py-4 border-b border-gray-700/60">
+                                          <h3 className="text-lg font-bold text-indigo-300 uppercase tracking-wide">
+                                              Section: {secNode.section}
+                                          </h3>
                                       </div>
                                       
-                                      {isIncluded && q.file_urls && q.file_urls.length > 0 && (
-                                          <div className="space-y-3 pl-10">
-                                              <p className="text-xs text-gray-500 font-bold uppercase">Available Answers:</p>
-                                              {q.file_urls.map((fileObj, idx) => (
-                                                  <label 
-                                                      key={idx} 
-                                                      className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                                          selections[q._id] === fileObj.url 
-                                                              ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' 
-                                                              : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:border-gray-500'
-                                                      }`}
-                                                  >
-                                                      <input 
-                                                          type="radio" 
-                                                          name={`q-${q._id}`}
-                                                          value={fileObj.url}
-                                                          checked={selections[q._id] === fileObj.url}
-                                                          onChange={() => handleSelectionChange(q._id, fileObj.url)}
-                                                          className="w-4 h-4 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600 focus:ring-2"
-                                                      />
-                                                      
-                                                      <div className="flex items-center gap-2">
-                                                          <UserCheck className="w-4 h-4 opacity-70" />
-                                                          <span className="font-bold text-sm tracking-wide">
-                                                              {fileObj.topper_name || 'Unknown Reference'}
-                                                              {fileObj.topper_year ? ` (${fileObj.topper_year})` : ''} - {fileObj.topper_rank ? `Rank ${fileObj.topper_rank}` : 'Unknown Rank'}
-                                                          </span>
-                                                      </div>
-                                                  </label>
-                                              ))}
-                                          </div>
-                                      )}
+                                      <div className="p-6 space-y-6">
+                                          {secNode.topics.map((topNode, tIndex) => (
+                                              <div key={tIndex} className="border-l-2 border-indigo-500/30 pl-4 space-y-4">
+                                                  <h4 className="text-md font-bold text-white mb-3">Topic: {topNode.title}</h4>
+                                                  
+                                                  <div className="space-y-4 pl-4">
+                                                      {topNode.questions.map((q, qIndex) => {
+                                                          const isIncluded = includedQuestions.has(q._id);
+                                                          return (
+                                                              <div key={q._id} className={`rounded-xl p-4 border transition-colors ${isIncluded ? 'bg-gray-800 border-indigo-500/40' : 'bg-gray-800/40 border-gray-700/50 opacity-75'}`}>
+                                                                  <div className="flex items-start gap-4 mb-3">
+                                                                      <button onClick={() => toggleIncludeQuestion(q._id)} className="mt-0.5 flex-shrink-0">
+                                                                          {isIncluded ? <CheckSquare className="w-5 h-5 text-indigo-500"/> : <Square className="w-5 h-5 text-gray-500" />}
+                                                                      </button>
+                                                                      <div>
+                                                                          <p className="text-white text-md font-medium leading-snug">{q.question_text}</p>
+                                                                      </div>
+                                                                  </div>
+                                                                  
+                                                                  {isIncluded && q.file_urls && q.file_urls.length > 0 && (
+                                                                      <div className="pl-9 space-y-2">
+                                                                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Available Answers</p>
+                                                                          {q.file_urls.map((fileObj, idx) => (
+                                                                              <div key={idx} className="flex items-center gap-3">
+                                                                                  <label 
+                                                                                      className={`flex-1 flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                                                                          selections[q._id] === fileObj.url 
+                                                                                              ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200' 
+                                                                                              : 'bg-gray-900/50 border-gray-700/50 text-gray-400 hover:border-gray-500'
+                                                                                      }`}
+                                                                                  >
+                                                                                      <input 
+                                                                                          type="radio" 
+                                                                                          name={`q-${q._id}`}
+                                                                                          value={fileObj.url}
+                                                                                          checked={selections[q._id] === fileObj.url}
+                                                                                          onChange={() => handleSelectionChange(q._id, fileObj.url)}
+                                                                                          className="w-3.5 h-3.5 text-indigo-600 bg-gray-800 border-gray-600 focus:ring-indigo-600"
+                                                                                      />
+                                                                                      <div className="flex items-center gap-2">
+                                                                                          <UserCheck className="w-3.5 h-3.5 opacity-70" />
+                                                                                          <span className="font-bold text-sm tracking-wide">
+                                                                                              {fileObj.topper_name || 'Ref Answer'}
+                                                                                          </span>
+                                                                                      </div>
+                                                                                  </label>
+                                                                                  
+                                                                                  <a 
+                                                                                      href={getCleanUrl(fileObj.url)}
+                                                                                      target="_blank"
+                                                                                      rel="noopener noreferrer"
+                                                                                      className="flex-shrink-0 flex items-center justify-center p-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors title='Preview Note'"
+                                                                                  >
+                                                                                      <FileText className="w-4 h-4" />
+                                                                                  </a>
+                                                                              </div>
+                                                                          ))}
+                                                                      </div>
+                                                                  )}
+                                                              </div>
+                                                          )
+                                                      })}
+                                                  </div>
+                                              </div>
+                                          ))}
+                                      </div>
                                   </div>
-                              )})}
+                              ))}
                           </div>
 
                           <div className="p-6 border-t border-gray-800 bg-gray-800/40 flex justify-end gap-4">
