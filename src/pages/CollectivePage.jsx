@@ -23,6 +23,7 @@ export default function CollectivePage() {
   
   // Final PDF View
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
 
   useEffect(() => {
      fetchTags().then(tags => {
@@ -204,10 +205,10 @@ export default function CollectivePage() {
       </div>
 
       {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!isGenerating) setShowModal(false) }} />
               
-              <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 overflow-hidden">
+              <div className="relative bg-gray-900 shadow-2xl w-full h-full max-w-full max-h-screen flex flex-col animate-in zoom-in-95 overflow-hidden">
                   
                   {pdfBlobUrl ? (
                       <>
@@ -319,14 +320,13 @@ export default function CollectivePage() {
                                                                                       </div>
                                                                                   </label>
                                                                                   
-                                                                                  <a 
-                                                                                      href={getCleanUrl(fileObj.url)}
-                                                                                      target="_blank"
-                                                                                      rel="noopener noreferrer"
-                                                                                      className="flex-shrink-0 flex items-center justify-center p-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors title='Preview Note'"
+                                                                                  <button 
+                                                                                      onClick={() => setPreviewPdfUrl(getCleanUrl(fileObj.url))}
+                                                                                      title='Preview Note'
+                                                                                      className="flex-shrink-0 flex items-center justify-center p-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors"
                                                                                   >
                                                                                       <FileText className="w-4 h-4" />
-                                                                                  </a>
+                                                                                  </button>
                                                                               </div>
                                                                           ))}
                                                                       </div>
@@ -360,6 +360,22 @@ export default function CollectivePage() {
                           </div>
                       </>
                   )}
+              </div>
+          </div>
+      )}
+
+      {previewPdfUrl && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md">
+              <div className="relative w-full h-full flex flex-col bg-gray-900">
+                  <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800">
+                      <h3 className="text-white font-bold text-lg">Topper Answer Sheet Preview</h3>
+                      <button onClick={() => setPreviewPdfUrl(null)} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded text-white font-bold transition-colors">
+                          Close Preview
+                      </button>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                      <iframe src={previewPdfUrl} className="w-full h-full border-0" title="Answer Preview" />
+                  </div>
               </div>
           </div>
       )}

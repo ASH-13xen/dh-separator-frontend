@@ -25,6 +25,20 @@ export const uploadPdf = async (file, metadataList) => {
   }
 };
 
+export const uploadManualQuestion = async (formData) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/upload/manual`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error manual uploading PDF:", error);
+    throw error.response?.data || { error: 'An unexpected error occurred during manual upload.' };
+  }
+};
+
 export const fetchQuestions = async () => {
   try {
     // 3. This one stays exactly the same as you had it

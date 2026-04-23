@@ -22,6 +22,7 @@ export default function ViewPage() {
   const [editSection, setEditSection] = useState('');
   const [editTopic, setEditTopic] = useState('');
   const [editOptional, setEditOptional] = useState('');
+  const [editFileUrls, setEditFileUrls] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -157,6 +158,7 @@ export default function ViewPage() {
     setEditSection(foundSec);
     setEditTopic(foundTop);
     setEditOptional(foundOpt);
+    setEditFileUrls(qa.file_urls ? JSON.parse(JSON.stringify(qa.file_urls)) : []);
   };
 
   const handleCancelEdit = () => {
@@ -165,6 +167,7 @@ export default function ViewPage() {
     setEditSection('');
     setEditTopic('');
     setEditOptional('');
+    setEditFileUrls([]);
   };
 
   const handleSaveEdit = async (id) => {
@@ -172,7 +175,7 @@ export default function ViewPage() {
     setIsSaving(true);
     try {
       const newTags = [editModule, editSection, editTopic, editOptional].filter(Boolean);
-      const updated = await updateQuestion(id, { tags: newTags });
+      const updated = await updateQuestion(id, { tags: newTags, file_urls: editFileUrls });
       setQuestions(prev => prev.map(q => q._id === id ? updated : q));
       setEditingId(null);
     } catch (err) {
@@ -357,6 +360,27 @@ export default function ViewPage() {
                                                 <option key={sub} value={sub}>{sub.replace('OptionalSubject', '')}</option>
                                             ))}
                                         </select>
+                                    </div>
+
+                                    {/* Topper Details */}
+                                    <div className="pt-2 border-t border-gray-700/50 mt-2">
+                                        <label className="text-xs text-gray-500 uppercase mb-2 block">Extracted Toppers</label>
+                                        {editFileUrls.length === 0 && <span className="text-xs text-gray-600">No topper files associated.</span>}
+                                        {editFileUrls.map((fileObj, idx) => (
+                                            <div key={idx} className="flex gap-2 mb-2 items-center">
+                                                <input 
+                                                    type="text" 
+                                                    value={fileObj.topper_name || ''}
+                                                    onChange={(e) => {
+                                                        const newUrls = [...editFileUrls];
+                                                        newUrls[idx].topper_name = e.target.value;
+                                                        setEditFileUrls(newUrls);
+                                                    }}
+                                                    className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-teal-400"
+                                                    placeholder="Topper Name"
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
 

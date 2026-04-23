@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import UploadPage from './pages/UploadPage';
 import ViewPage from './pages/ViewPage';
 import CollectivePage from './pages/CollectivePage';
-import { UploadCloud, Library, BookOpen } from 'lucide-react';
+import ManualPage from './pages/ManualPage';
+import { UploadCloud, Library, BookOpen, FileEdit } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload');
@@ -40,6 +41,12 @@ function App() {
              >
                <BookOpen className="w-4 h-4" /> Collective Book
              </button>
+             <button 
+               onClick={() => setActiveTab('manual')}
+               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-orange-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <FileEdit className="w-4 h-4" /> Manual Questions
+             </button>
            </div>
            
         </div>
@@ -50,6 +57,7 @@ function App() {
         {activeTab === 'upload' && <UploadPage />}
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
+        {activeTab === 'manual' && <ManualPage />}
       </div>
 
     </div>
