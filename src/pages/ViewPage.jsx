@@ -22,6 +22,9 @@ export default function ViewPage() {
   const [editSection, setEditSection] = useState('');
   const [editTopic, setEditTopic] = useState('');
   const [editOptional, setEditOptional] = useState('');
+  const [editOptionalPaper, setEditOptionalPaper] = useState('');
+  const [editOptionalSection, setEditOptionalSection] = useState('');
+  const [editOptionalTopic, setEditOptionalTopic] = useState('');
   const [editFileUrls, setEditFileUrls] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -113,6 +116,9 @@ export default function ViewPage() {
     let foundSec = '';
     let foundTop = '';
     let foundOpt = '';
+    let foundOptSec = '';
+    let foundOptTop = '';
+    let foundOptPaper = '';
     
     const tags = qa.tags || [];
     
@@ -128,8 +134,6 @@ export default function ViewPage() {
         if (foundMod) {
             const sections = hierarchyData.gsModules[foundMod];
             for (const secObj of sections) {
-                // If the section text is a tag, set it. 
-                // Alternatively, just search topics. If we find a topic, its parent is the section.
                 let topicMatch = false;
                 if (secObj.topics) {
                     for (const t of secObj.topics) {
@@ -146,10 +150,31 @@ export default function ViewPage() {
         }
         
         // Find Optional
-        for (const opt of hierarchyData.optionalSubjects) {
+        for (const opt of Object.keys(hierarchyData.optionalSubjects)) {
             if (tags.includes(opt)) {
                 foundOpt = opt;
                 break;
+            }
+        }
+        
+        if (foundOpt) {
+            if (tags.includes('Paper 1')) foundOptPaper = 'Paper 1';
+            else if (tags.includes('Paper 2')) foundOptPaper = 'Paper 2';
+
+            const sections = hierarchyData.optionalSubjects[foundOpt];
+            for (const secObj of sections) {
+                let topicMatch = false;
+                if (secObj.topics) {
+                    for (const t of secObj.topics) {
+                        if (tags.includes(t.title)) {
+                            foundOptSec = secObj.section;
+                            foundOptTop = t.title;
+                            topicMatch = true;
+                            break;
+                        }
+                    }
+                }
+                if (topicMatch) break;
             }
         }
     }
@@ -158,6 +183,9 @@ export default function ViewPage() {
     setEditSection(foundSec);
     setEditTopic(foundTop);
     setEditOptional(foundOpt);
+    setEditOptionalPaper(foundOptPaper);
+    setEditOptionalSection(foundOptSec);
+    setEditOptionalTopic(foundOptTop);
     setEditFileUrls(qa.file_urls ? JSON.parse(JSON.stringify(qa.file_urls)) : []);
   };
 
@@ -167,6 +195,9 @@ export default function ViewPage() {
     setEditSection('');
     setEditTopic('');
     setEditOptional('');
+    setEditOptionalPaper('');
+    setEditOptionalSection('');
+    setEditOptionalTopic('');
     setEditFileUrls([]);
   };
 
@@ -174,9 +205,13 @@ export default function ViewPage() {
     if (!id) return;
     setIsSaving(true);
     try {
-      const newTags = [editModule, editSection, editTopic, editOptional].filter(Boolean);
+      const newTags = [
+          editModule, editSection, editTopic, 
+          editOptional, editOptionalPaper, editOptionalSection, editOptionalTopic
+      ].filter(Boolean);
+      
       const updated = await updateQuestion(id, { tags: newTags, file_urls: editFileUrls });
-      setQuestions(prev => prev.map(q => q._id === id ? updated : q));
+      setQuestions(prev => prev.map(q => q._id === updated._id ? updated : q));
       setEditingId(null);
     } catch (err) {
       alert(err.error || 'Failed to save changes');
@@ -213,6 +248,16 @@ export default function ViewPage() {
       const secObj = availableSections.find(s => s.section === editSection);
       if (secObj && secObj.topics) {
           availableTopics = secObj.topics;
+      }
+  } 
+
+  let availableOptionalSections = [];
+  let availableOptionalTopics = [];
+  if (editOptional && hierarchyData.optionalSubjects[editOptional]) {
+      availableOptionalSections = hierarchyData.optionalSubjects[editOptional];
+      const secObj = availableOptionalSections.find(s => s.section === editOptionalSection);
+      if (secObj && secObj.topics) {
+          availableOptionalTopics = secObj.topics;
       }
   }
 
@@ -331,7 +376,7 @@ export default function ViewPage() {
                                     )}
 
                                     {/* Topic Dropdown */}
-                                    {editSection && (
+                                    {(editModule && editSection) && (
                                     <div>
                                         <label className="text-xs text-gray-500 uppercase mb-1 block">Topic</label>
                                         <select
@@ -348,19 +393,77 @@ export default function ViewPage() {
                                     )}
 
                                     {/* Optional Subject */}
-                                    <div>
+                                    <div className="pt-2 border-t border-gray-700/50 mt-2">
                                         <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Subject (Additional)</label>
                                         <select
                                             value={editOptional}
-                                            onChange={(e) => setEditOptional(e.target.value)}
+                                            onChange={(e) => {
+                                                setEditOptional(e.target.value);
+                                                setEditOptionalPaper('');
+                                                setEditOptionalSection('');
+                                                setEditOptionalTopic('');
+                                            }}
                                             className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
                                         >
                                             <option value="">-- None --</option>
-                                            {hierarchyData && hierarchyData.optionalSubjects.map(sub => (
+                                            {hierarchyData && Object.keys(hierarchyData.optionalSubjects).sort().map(sub => (
                                                 <option key={sub} value={sub}>{sub.replace('OptionalSubject', '')}</option>
                                             ))}
                                         </select>
                                     </div>
+
+                                    {/* Optional Subject Paper */}
+                                    {editOptional && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Paper</label>
+                                        <select
+                                            value={editOptionalPaper}
+                                            onChange={(e) => setEditOptionalPaper(e.target.value)}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="">-- None --</option>
+                                            <option value="Paper 1">Paper 1</option>
+                                            <option value="Paper 2">Paper 2</option>
+                                        </select>
+                                    </div>
+                                    )}
+
+                                    {/* Optional Section Dropdown */}
+                                    {editOptional && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Section</label>
+                                        <select
+                                            value={editOptionalSection}
+                                            onChange={(e) => {
+                                                setEditOptionalSection(e.target.value);
+                                                setEditOptionalTopic('');
+                                            }}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="">-- None --</option>
+                                            {availableOptionalSections.map((sec, i) => (
+                                                <option key={i} value={sec.section}>{sec.section.substring(0, 80)}...</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    )}
+
+                                    {/* Optional Topic Dropdown */}
+                                    {(editOptional && editOptionalSection) && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Topic</label>
+                                        <select
+                                            value={editOptionalTopic}
+                                            onChange={(e) => setEditOptionalTopic(e.target.value)}
+                                            className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
+                                        >
+                                            <option value="">-- None --</option>
+                                            {availableOptionalTopics.map((top, i) => (
+                                                <option key={i} value={top.title}>{top.title.substring(0, 80)}...</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    )}
 
                                     {/* Topper Details */}
                                     <div className="pt-2 border-t border-gray-700/50 mt-2">

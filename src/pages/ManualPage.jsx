@@ -11,6 +11,10 @@ export default function ManualPage() {
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('');
   const [selectedOptional, setSelectedOptional] = useState('');
+  const [selectedOptionalPaper, setSelectedOptionalPaper] = useState('');
+  const [selectedOptionalSection, setSelectedOptionalSection] = useState('');
+  const [selectedOptionalTopic, setSelectedOptionalTopic] = useState('');
+  
   const [topperName, setTopperName] = useState('');
   const [topperYear, setTopperYear] = useState('');
   const [topperRank, setTopperRank] = useState('');
@@ -46,6 +50,9 @@ export default function ManualPage() {
     setSelectedSection('');
     setSelectedTopic('');
     setSelectedOptional('');
+    setSelectedOptionalPaper('');
+    setSelectedOptionalSection('');
+    setSelectedOptionalTopic('');
     setTopperName('');
     setTopperYear('');
     setTopperRank('');
@@ -66,7 +73,10 @@ export default function ManualPage() {
     setSuccessMsg('');
     setIsUploading(true);
 
-    const tags = [selectedModule, selectedSection, selectedTopic, selectedOptional].filter(Boolean);
+    const tags = [
+        selectedModule, selectedSection, selectedTopic, 
+        selectedOptional, selectedOptionalPaper, selectedOptionalSection, selectedOptionalTopic
+    ].filter(Boolean);
 
     const formData = new FormData();
     formData.append('pdf', file);
@@ -97,6 +107,16 @@ export default function ManualPage() {
       const secObj = availableSections.find(s => s.section === selectedSection);
       if (secObj && secObj.topics) {
           availableTopics = secObj.topics;
+      }
+  }
+
+  let availableOptionalSections = [];
+  let availableOptionalTopics = [];
+  if (selectedOptional && hierarchyData && hierarchyData.optionalSubjects[selectedOptional]) {
+      availableOptionalSections = hierarchyData.optionalSubjects[selectedOptional];
+      const secObj = availableOptionalSections.find(s => s.section === selectedOptionalSection);
+      if (secObj && secObj.topics) {
+          availableOptionalTopics = secObj.topics;
       }
   }
 
@@ -180,11 +200,16 @@ export default function ManualPage() {
                         <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Subject</label>
                         <select
                             value={selectedOptional}
-                            onChange={(e) => setSelectedOptional(e.target.value)}
+                            onChange={(e) => {
+                                setSelectedOptional(e.target.value);
+                                setSelectedOptionalPaper('');
+                                setSelectedOptionalSection('');
+                                setSelectedOptionalTopic('');
+                            }}
                             className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
                         >
                             <option value="">-- Select Optional --</option>
-                            {hierarchyData && hierarchyData.optionalSubjects.map(sub => (
+                            {hierarchyData && Object.keys(hierarchyData.optionalSubjects).sort().map(sub => (
                                 <option key={sub} value={sub}>{sub.replace('OptionalSubject', '')}</option>
                             ))}
                         </select>
@@ -220,6 +245,56 @@ export default function ManualPage() {
                             <option value="">-- Select Topic --</option>
                             {availableTopics.map((top, i) => (
                                 <option key={i} value={top.title}>{top.title}</option>
+                            ))}
+                        </select>
+                    </div>
+                    )}
+
+                    {selectedOptional && (
+                    <div className="md:col-span-2">
+                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Paper</label>
+                        <select
+                            value={selectedOptionalPaper}
+                            onChange={(e) => setSelectedOptionalPaper(e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                        >
+                            <option value="">-- Select Paper --</option>
+                            <option value="Paper 1">Paper 1</option>
+                            <option value="Paper 2">Paper 2</option>
+                        </select>
+                    </div>
+                    )}
+
+                    {selectedOptional && (
+                    <div className="md:col-span-2">
+                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Section</label>
+                        <select
+                            value={selectedOptionalSection}
+                            onChange={(e) => {
+                                setSelectedOptionalSection(e.target.value);
+                                setSelectedOptionalTopic('');
+                            }}
+                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                        >
+                            <option value="">-- Select Optional Section --</option>
+                            {availableOptionalSections.map((sec, i) => (
+                                <option key={i} value={sec.section}>{sec.section.substring(0, 60)}...</option>
+                            ))}
+                        </select>
+                    </div>
+                    )}
+
+                    {(selectedOptional && selectedOptionalSection) && (
+                    <div className="md:col-span-2">
+                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Topic</label>
+                        <select
+                            value={selectedOptionalTopic}
+                            onChange={(e) => setSelectedOptionalTopic(e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                        >
+                            <option value="">-- Select Optional Topic --</option>
+                            {availableOptionalTopics.map((top, i) => (
+                                <option key={i} value={top.title}>{top.title.substring(0, 60)}...</option>
                             ))}
                         </select>
                     </div>
