@@ -8,6 +8,11 @@ import { UploadCloud, Library, BookOpen, FileEdit } from 'lucide-react';
 function App() {
   const [activeTab, setActiveTab] = useState('upload');
 
+  // Lifted State for UploadPage
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadResults, setUploadResults] = useState([]);
+  const [uploadError, setUploadError] = useState('');
+
   return (
     <div className="min-h-screen bg-[#060b14] flex flex-col font-sans">
       
@@ -54,7 +59,13 @@ function App() {
 
       {/* Dynamic View Injection */}
       <div className="flex-1 w-full bg-[#0f172a]/50">
-        {activeTab === 'upload' && <UploadPage />}
+        {activeTab === 'upload' && (
+          <UploadPage 
+            persistedFile={uploadFile} setPersistedFile={setUploadFile}
+            persistedResults={uploadResults} setPersistedResults={setUploadResults}
+            persistedError={uploadError} setPersistedError={setUploadError}
+          />
+        )}
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
         {activeTab === 'manual' && <ManualPage />}
