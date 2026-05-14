@@ -54,13 +54,24 @@ export default function UploadPage() {
   doc.setFontSize(11);
   doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
 
-  const tableData = results.map((item, index) => [
-    index + 1,
-    item.subject || 'Uncategorized',
-    item.question_text || '-',
-    item.topic || '', // <--- CHANGED THIS from detailed_topic to topic
-    `Pgs ${item.start_page || '?'}-${item.end_page || '?'}`
-  ]);
+  const tableData = results.map((item, index) => {
+    let subject = 'Uncategorized';
+    let topic = '';
+    
+    if (item.tags && item.tags.length > 0) {
+      // Tags usually structured as: [Paper, Section, Topic]
+      subject = item.tags[0];
+      topic = item.tags.slice(1).join(' > ');
+    }
+
+    return [
+      index + 1,
+      subject,
+      item.question_text || '-',
+      topic, 
+      `Pgs ${item.start_page || '?'}-${item.end_page || '?'}`
+    ];
+  });
 
   autoTable(doc, {
     startY: 35,
