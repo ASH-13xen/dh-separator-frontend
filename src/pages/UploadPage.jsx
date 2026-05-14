@@ -59,7 +59,6 @@ export default function UploadPage() {
     let topic = '';
     
     if (item.tags && item.tags.length > 0) {
-      // Tags usually structured as: [Paper, Section, Topic]
       subject = item.tags[0];
       topic = item.tags.slice(1).join(' > ');
     }
@@ -68,7 +67,7 @@ export default function UploadPage() {
       index + 1,
       subject,
       item.question_text || '-',
-      topic, 
+      topic,
       `Pgs ${item.start_page || '?'}-${item.end_page || '?'}`
     ];
   });
