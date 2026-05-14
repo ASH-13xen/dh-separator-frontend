@@ -79,3 +79,13 @@ export const updateQuestion = async (id, data) => {
     throw error.response?.data || { error: 'Failed to update question.' };
   }
 };
+
+export const updateToppers = async (updates) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/upload/update-toppers`, { updates });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating toppers:", error);
+    throw error.response?.data || { error: 'Failed to update topper details.' };
+  }
+};
