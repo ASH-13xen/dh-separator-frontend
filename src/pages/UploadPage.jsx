@@ -94,7 +94,10 @@ export default function UploadPage({
            if (topperInfo && result.file_urls && result.file_urls.length > 0) {
              const updatedUrlObj = { 
                ...result.file_urls[0], 
-               topper_name: topperInfo.topperName || 'Unknown Topper' 
+               topper_name: topperInfo.topperName || 'Unknown Topper',
+               topper_year: topperInfo.topperYear,
+               topper_rank: topperInfo.topperRank,
+               topper_marks: topperInfo.topperMarks
              };
              return { ...result, file_urls: [updatedUrlObj] };
            }

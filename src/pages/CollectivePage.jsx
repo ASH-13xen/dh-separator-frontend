@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye, FileText } from 'lucide-react';
+import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye, FileText, GripVertical } from 'lucide-react';
 import { fetchTags } from '../services/api';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
@@ -102,9 +102,62 @@ export default function CollectivePage() {
       }
   };
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e, sIndex, tIndex, qIndex) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ sIndex, tIndex, qIndex }));
+      e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, destSIndex, destTIndex, destQIndex) => {
+      e.preventDefault();
+      try {
+          const dataStr = e.dataTransfer.getData('text/plain');
+          if (!dataStr) return;
+          const { sIndex: srcSIndex, tIndex: srcTIndex, qIndex: srcQIndex } = JSON.parse(dataStr);
+          
+          // Only allow reordering within the same topic
+          if (srcSIndex !== destSIndex || srcTIndex !== destTIndex) return;
+          if (srcQIndex === destQIndex) return;
+
+          setPreviewData(prev => {
+              const newData = [...prev];
+              // Clone the section and topic to avoid mutating state directly
+              newData[destSIndex] = { ...newData[destSIndex] };
+              newData[destSIndex].topics = [...newData[destSIndex].topics];
+              newData[destSIndex].topics[destTIndex] = { ...newData[destSIndex].topics[destTIndex] };
+              
+              const questions = [...newData[destSIndex].topics[destTIndex].questions];
+              const [draggedItem] = questions.splice(srcQIndex, 1);
+              questions.splice(destQIndex, 0, draggedItem);
+              
+              newData[destSIndex].topics[destTIndex].questions = questions;
+              return newData;
+          });
+      } catch (err) {
+          console.error("Drop failed:", err);
+      }
+  };
+
   const generateAndPreviewPdf = async () => {
     setIsGenerating(true);
     try {
+        // Compute the strictly ordered included questions based on current previewData
+        const orderedIncludedIds = [];
+        previewData.forEach(s => {
+            s.topics.forEach(t => {
+                t.questions.forEach(q => {
+                    if (includedQuestions.has(q._id)) {
+                        orderedIncludedIds.push(q._id);
+                    }
+                });
+            });
+        });
+
         const response = await fetch(`${API_BASE_URL}/api/collective/generate`, {
             method: 'POST',
             headers: {
@@ -113,7 +166,7 @@ export default function CollectivePage() {
             body: JSON.stringify({
                 moduleName: selectedModule,
                 selections: selections,
-                includedQuestionIds: Array.from(includedQuestions)
+                includedQuestionIds: orderedIncludedIds
             })
         });
 
@@ -282,8 +335,18 @@ export default function CollectivePage() {
                                                       {topNode.questions.map((q, qIndex) => {
                                                           const isIncluded = includedQuestions.has(q._id);
                                                           return (
-                                                              <div key={q._id} className={`rounded-xl p-4 border transition-colors ${isIncluded ? 'bg-gray-800 border-indigo-500/40' : 'bg-gray-800/40 border-gray-700/50 opacity-75'}`}>
+                                                              <div 
+                                                                  key={q._id} 
+                                                                  draggable
+                                                                  onDragStart={(e) => handleDragStart(e, sIndex, tIndex, qIndex)}
+                                                                  onDragOver={handleDragOver}
+                                                                  onDrop={(e) => handleDrop(e, sIndex, tIndex, qIndex)}
+                                                                  className={`rounded-xl p-4 border transition-all ${isIncluded ? 'bg-gray-800 border-indigo-500/40 shadow-sm' : 'bg-gray-800/40 border-gray-700/50 opacity-75'} hover:border-indigo-400`}
+                                                              >
                                                                   <div className="flex items-start gap-4 mb-3">
+                                                                      <div className="cursor-grab hover:text-white text-gray-500 mt-1">
+                                                                          <GripVertical className="w-5 h-5" />
+                                                                      </div>
                                                                       <button onClick={() => toggleIncludeQuestion(q._id)} className="mt-0.5 flex-shrink-0">
                                                                           {isIncluded ? <CheckSquare className="w-5 h-5 text-indigo-500"/> : <Square className="w-5 h-5 text-gray-500" />}
                                                                       </button>
@@ -293,7 +356,7 @@ export default function CollectivePage() {
                                                                   </div>
                                                                   
                                                                   {isIncluded && q.file_urls && q.file_urls.length > 0 && (
-                                                                      <div className="pl-9 space-y-2">
+                                                                      <div className="pl-14 space-y-2">
                                                                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Available Answers</p>
                                                                           {q.file_urls.map((fileObj, idx) => (
                                                                               <div key={idx} className="flex items-center gap-3">
