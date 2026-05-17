@@ -88,21 +88,29 @@ export default function UploadPage({
         await updateToppers(updates);
         
         // Update local state to reflect new names
-        setPersistedResults(prev => prev.map(result => {
-           const sheetIdx = result.answer_sheet_index || 1;
-           const topperInfo = detectedToppers.find(t => t.sheetIndex === sheetIdx);
-           if (topperInfo && result.file_urls && result.file_urls.length > 0) {
-             const updatedUrlObj = { 
-               ...result.file_urls[0], 
-               topper_name: topperInfo.topperName || 'Unknown Topper',
-               topper_year: topperInfo.topperYear,
-               topper_rank: topperInfo.topperRank,
-               topper_marks: topperInfo.topperMarks
-             };
-             return { ...result, file_urls: [updatedUrlObj] };
-           }
-           return result;
-        }));
+        setPersistedResults(prev => {
+          try {
+            return prev.map(result => {
+               if (!result) return result;
+               const sheetIdx = result.answer_sheet_index || 1;
+               const topperInfo = detectedToppers.find(t => t.sheetIndex === sheetIdx);
+               if (topperInfo && result.file_urls && Array.isArray(result.file_urls) && result.file_urls.length > 0) {
+                 const updatedUrlObj = { 
+                   ...result.file_urls[0], 
+                   topper_name: topperInfo.topperName ? String(topperInfo.topperName) : 'Unknown Topper',
+                   topper_year: topperInfo.topperYear ? String(topperInfo.topperYear) : undefined,
+                   topper_rank: topperInfo.topperRank ? String(topperInfo.topperRank) : undefined,
+                   topper_marks: topperInfo.topperMarks ? String(topperInfo.topperMarks) : undefined
+                 };
+                 return { ...result, file_urls: [updatedUrlObj] };
+               }
+               return result;
+            });
+          } catch (e) {
+            console.error("Error updating local state:", e);
+            return prev;
+          }
+        });
       }
 
       setShowTopperModal(false);
