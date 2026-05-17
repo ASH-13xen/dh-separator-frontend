@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PdfUploader from '../components/PdfUploader';
 import ResultsViewer from '../components/ResultsViewer';
 import { uploadPdf, updateToppers } from '../services/api';
-import { AlertTriangle, CheckCircle2, Download, Save, X, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Save, X, RefreshCw, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
