@@ -89,3 +89,13 @@ export const updateToppers = async (updates) => {
     throw error.response?.data || { error: 'Failed to update toppers.' };
   }
 };
+
+export const addCustomTag = async (tagData) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/data/hierarchy/custom`, tagData);
+    return response.data;
+  } catch (error) {
+    console.error("Error adding custom tag:", error);
+    throw error.response?.data || { error: 'Failed to add custom tag.' };
+  }
+};
