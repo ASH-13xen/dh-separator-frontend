@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import UploadPage from './pages/UploadPage';
+import QuesPdfPage from './pages/QuesPdfPage';
 import ViewPage from './pages/ViewPage';
 import CollectivePage from './pages/CollectivePage';
 import ManualPage from './pages/ManualPage';
-import { UploadCloud, Library, BookOpen, FileEdit } from 'lucide-react';
+import { UploadCloud, Library, BookOpen, FileEdit, FileText } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload');
@@ -28,14 +29,20 @@ function App() {
            </div>
 
            <div className="flex bg-gray-900 border border-gray-800 p-1 rounded-xl">
-             <button 
-               onClick={() => setActiveTab('upload')}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'upload' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-             >
-               <UploadCloud className="w-4 h-4" /> Upload
-             </button>
-             <button 
-               onClick={() => setActiveTab('view')}
+              <button 
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'upload' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+              >
+                <UploadCloud className="w-4 h-4" /> Upload
+              </button>
+              <button 
+                onClick={() => setActiveTab('quespdf')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'quespdf' ? 'bg-teal-650 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+              >
+                <FileText className="w-4 h-4" /> QuesPDF Maker
+              </button>
+              <button 
+                onClick={() => setActiveTab('view')}
                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'view' ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
              >
                <Library className="w-4 h-4" /> View Library
@@ -66,6 +73,7 @@ function App() {
             persistedError={uploadError} setPersistedError={setUploadError}
           />
         )}
+        {activeTab === 'quespdf' && <QuesPdfPage />}
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
         {activeTab === 'manual' && <ManualPage />}

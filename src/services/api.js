@@ -99,3 +99,49 @@ export const addCustomTag = async (tagData) => {
     throw error.response?.data || { error: 'Failed to add custom tag.' };
   }
 };
+
+export const processQuesPdf = async (file) => {
+  const formData = new FormData();
+  formData.append('pdf', file);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/quespdf/process`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error processing QuesPDF:", error);
+    throw error.response?.data || { error: 'An unexpected error occurred during QuesPDF processing.' };
+  }
+};
+
+export const fetchQuesPdfHistory = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/quespdf/history`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching QuesPDF history:", error);
+    throw error.response?.data || { error: 'Failed to retrieve QuesPDF history.' };
+  }
+};
+
+export const updateQuesPdf = async (id, questions) => {
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/quespdf/${id}`, { questions });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating QuesPDF record:", error);
+    throw error.response?.data || { error: 'Failed to update QuesPDF record.' };
+  }
+};
+
+export const deleteQuesPdf = async (id) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/quespdf/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting QuesPDF record:", error);
+    throw error.response?.data || { error: 'Failed to delete QuesPDF record.' };
+  }
+};
