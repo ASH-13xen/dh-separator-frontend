@@ -78,11 +78,12 @@ export default function ResultsViewer({ results, onResultUpdate }) {
     }
     
     try {
-      await addCustomTag(payload);
+      const response = await addCustomTag(payload);
+      const createdName = response.name || payload.name;
       
       setHierarchyData(prev => {
         const next = { ...prev };
-        const name = payload.name;
+        const name = createdName;
         
         if (addTagType === 'gsModule') {
           if (!next.gsModules) next.gsModules = {};
@@ -138,24 +139,24 @@ export default function ResultsViewer({ results, onResultUpdate }) {
       });
       
       if (addTagType === 'gsModule') {
-        setEditModule(payload.name);
+        setEditModule(createdName);
         setEditSection('');
         setEditTopic('');
       } else if (addTagType === 'gsSection') {
-        setEditSection(payload.name);
+        setEditSection(createdName);
         setEditTopic('');
       } else if (addTagType === 'gsTopic') {
-        setEditTopic(payload.name);
+        setEditTopic(createdName);
       } else if (addTagType === 'optionalSubject') {
-        setEditOptional(payload.name);
+        setEditOptional(createdName);
         setEditOptionalPaper('');
         setEditOptionalSection('');
         setEditOptionalTopic('');
       } else if (addTagType === 'optionalSection') {
-        setEditOptionalSection(payload.name);
+        setEditOptionalSection(createdName);
         setEditOptionalTopic('');
       } else if (addTagType === 'optionalTopic') {
-        setEditOptionalTopic(payload.name);
+        setEditOptionalTopic(createdName);
       }
       
       setShowAddTagModal(false);

@@ -86,11 +86,12 @@ export default function ManualPage() {
     }
     
     try {
-      await addCustomTag(payload);
+      const response = await addCustomTag(payload);
+      const createdName = response.name || payload.name;
       
       setHierarchyData(prev => {
         const next = { ...prev };
-        const name = payload.name;
+        const name = createdName;
         
         if (addTagType === 'gsModule') {
           if (!next.gsModules) next.gsModules = {};
@@ -146,24 +147,24 @@ export default function ManualPage() {
       });
       
       if (addTagType === 'gsModule') {
-        setSelectedModule(payload.name);
+        setSelectedModule(createdName);
         setSelectedSection('');
         setSelectedTopic('');
       } else if (addTagType === 'gsSection') {
-        setSelectedSection(payload.name);
+        setSelectedSection(createdName);
         setSelectedTopic('');
       } else if (addTagType === 'gsTopic') {
-        setSelectedTopic(payload.name);
+        setSelectedTopic(createdName);
       } else if (addTagType === 'optionalSubject') {
-        setSelectedOptional(payload.name);
+        setSelectedOptional(createdName);
         setSelectedOptionalPaper('');
         setSelectedOptionalSection('');
         setSelectedOptionalTopic('');
       } else if (addTagType === 'optionalSection') {
-        setSelectedOptionalSection(payload.name);
+        setSelectedOptionalSection(createdName);
         setSelectedOptionalTopic('');
       } else if (addTagType === 'optionalTopic') {
-        setSelectedOptionalTopic(payload.name);
+        setSelectedOptionalTopic(createdName);
       }
       
       setShowAddTagModal(false);
