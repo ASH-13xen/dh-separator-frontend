@@ -26,6 +26,7 @@ export default function ViewPage() {
   const [editOptionalSection, setEditOptionalSection] = useState('');
   const [editOptionalTopic, setEditOptionalTopic] = useState('');
   const [editFileUrls, setEditFileUrls] = useState([]);
+  const [editQuestionText, setEditQuestionText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Add custom tag modal states
@@ -56,6 +57,8 @@ export default function ViewPage() {
         setEditOptionalPaper('');
         setEditOptionalSection('');
         setEditOptionalTopic('');
+      } else if (type === 'optionalPaper') {
+        setEditOptionalPaper(value);
       } else if (type === 'optionalSection') {
         setEditOptionalSection(value);
         setEditOptionalTopic('');
@@ -169,6 +172,8 @@ export default function ViewPage() {
         setEditOptionalPaper('');
         setEditOptionalSection('');
         setEditOptionalTopic('');
+      } else if (addTagType === 'optionalPaper') {
+        setEditOptionalPaper(createdName);
       } else if (addTagType === 'optionalSection') {
         setEditOptionalSection(createdName);
         setEditOptionalTopic('');
@@ -190,6 +195,7 @@ export default function ViewPage() {
     else if (addTagType === 'gsSection') setEditSection(addTagPrevValue);
     else if (addTagType === 'gsTopic') setEditTopic(addTagPrevValue);
     else if (addTagType === 'optionalSubject') setEditOptional(addTagPrevValue);
+    else if (addTagType === 'optionalPaper') setEditOptionalPaper(addTagPrevValue);
     else if (addTagType === 'optionalSection') setEditOptionalSection(addTagPrevValue);
     else if (addTagType === 'optionalTopic') setEditOptionalTopic(addTagPrevValue);
     
@@ -327,8 +333,44 @@ export default function ViewPage() {
         }
         
         if (foundOpt) {
-            if (tags.includes('Paper 1')) foundOptPaper = 'Paper 1';
-            else if (tags.includes('Paper 2')) foundOptPaper = 'Paper 2';
+            // Find all known syllabus hierarchy tags
+            const knownTags = new Set();
+            if (hierarchyData.gsModules) {
+              Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
+                knownTags.add(mod);
+                if (Array.isArray(sections)) {
+                  sections.forEach(secItem => {
+                    if (secItem.section) knownTags.add(secItem.section);
+                    if (secItem.topics && Array.isArray(secItem.topics)) {
+                      secItem.topics.forEach(topicItem => {
+                        if (topicItem.title) knownTags.add(topicItem.title);
+                      });
+                    }
+                  });
+                }
+              });
+            }
+            if (hierarchyData.optionalSubjects) {
+              Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
+                knownTags.add(sub);
+                if (Array.isArray(sections)) {
+                  sections.forEach(secItem => {
+                    if (secItem.section) knownTags.add(secItem.section);
+                    if (secItem.topics && Array.isArray(secItem.topics)) {
+                      secItem.topics.forEach(topicItem => {
+                        if (topicItem.title) knownTags.add(topicItem.title);
+                      });
+                    }
+                  });
+                }
+              });
+            }
+
+            // The paper is any tag of this question that is not a known hierarchy tag
+            const paperTag = tags.find(t => !knownTags.has(t));
+            if (paperTag) {
+                foundOptPaper = paperTag;
+            }
 
             const sections = hierarchyData.optionalSubjects[foundOpt];
             for (const secObj of sections) {
@@ -356,6 +398,7 @@ export default function ViewPage() {
     setEditOptionalSection(foundOptSec);
     setEditOptionalTopic(foundOptTop);
     setEditFileUrls(qa.file_urls ? JSON.parse(JSON.stringify(qa.file_urls)) : []);
+    setEditQuestionText(qa.question_text || '');
   };
 
   const handleCancelEdit = () => {
@@ -368,6 +411,7 @@ export default function ViewPage() {
     setEditOptionalSection('');
     setEditOptionalTopic('');
     setEditFileUrls([]);
+    setEditQuestionText('');
   };
 
   const handleSaveEdit = async (id) => {
@@ -379,7 +423,11 @@ export default function ViewPage() {
           editOptional, editOptionalPaper, editOptionalSection, editOptionalTopic
       ].filter(Boolean);
       
-      const updated = await updateQuestion(id, { tags: newTags, file_urls: editFileUrls });
+      const updated = await updateQuestion(id, { 
+        tags: newTags, 
+        file_urls: editFileUrls,
+        question_text: editQuestionText
+      });
       setQuestions(prev => prev.map(q => q._id === updated._id ? updated : q));
       setEditingId(null);
     } catch (err) {
@@ -410,6 +458,54 @@ export default function ViewPage() {
   }
 
   // Derive Dropdown Options dynamically while editing
+  const availableOptionalPapers = useMemo(() => {
+    const papers = new Set(["Paper 1", "Paper 2"]);
+    if (hierarchyData) {
+      const knownTags = new Set();
+      if (hierarchyData.gsModules) {
+        Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
+          knownTags.add(mod);
+          if (Array.isArray(sections)) {
+            sections.forEach(secItem => {
+              if (secItem.section) knownTags.add(secItem.section);
+              if (secItem.topics && Array.isArray(secItem.topics)) {
+                secItem.topics.forEach(topicItem => {
+                  if (topicItem.title) knownTags.add(topicItem.title);
+                });
+              }
+            });
+          }
+        });
+      }
+      if (hierarchyData.optionalSubjects) {
+        Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
+          knownTags.add(sub);
+          if (Array.isArray(sections)) {
+            sections.forEach(secItem => {
+              if (secItem.section) knownTags.add(secItem.section);
+              if (secItem.topics && Array.isArray(secItem.topics)) {
+                secItem.topics.forEach(topicItem => {
+                  if (topicItem.title) knownTags.add(topicItem.title);
+                });
+              }
+            });
+          }
+        });
+      }
+      
+      questions.forEach(q => {
+        if (q.tags && Array.isArray(q.tags)) {
+          q.tags.forEach(tag => {
+            if (!knownTags.has(tag)) {
+              papers.add(tag);
+            }
+          });
+        }
+      });
+    }
+    return Array.from(papers).sort();
+  }, [questions, hierarchyData]);
+
   let availableSections = [];
   let availableTopics = [];
   if (editModule && hierarchyData.gsModules[editModule]) {
@@ -579,12 +675,14 @@ export default function ViewPage() {
                                         <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Paper</label>
                                         <select
                                             value={editOptionalPaper}
-                                            onChange={(e) => setEditOptionalPaper(e.target.value)}
+                                            onChange={(e) => handleSelectChange('optionalPaper', e.target.value, editOptionalPaper)}
                                             className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
                                         >
                                             <option value="">-- None --</option>
-                                            <option value="Paper 1">Paper 1</option>
-                                            <option value="Paper 2">Paper 2</option>
+                                            {availableOptionalPapers.map((paper, i) => (
+                                                <option key={i} value={paper}>{paper}</option>
+                                            ))}
+                                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
                                         </select>
                                     </div>
                                     )}
@@ -708,7 +806,16 @@ export default function ViewPage() {
                          )}
                        </div>
                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Question Context</h4>
-                       <p className="text-white font-medium text-lg leading-snug">{qa.question_text}</p>
+                       {isEditing ? (
+                           <textarea
+                               value={editQuestionText}
+                               onChange={(e) => setEditQuestionText(e.target.value)}
+                               className="w-full bg-gray-900 border border-teal-500/50 rounded-lg py-2.5 px-3 text-white text-lg font-medium leading-snug focus:outline-none focus:border-teal-400 min-h-[100px]"
+                               rows={3}
+                           />
+                       ) : (
+                           <p className="text-white font-medium text-lg leading-snug">{qa.question_text}</p>
+                       )}
                    </div>
 
                   <div className="lg:w-1/3 bg-gray-900/50 rounded-xl p-4 border border-gray-700">
