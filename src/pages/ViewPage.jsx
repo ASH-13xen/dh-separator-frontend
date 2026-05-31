@@ -234,6 +234,54 @@ export default function ViewPage() {
     });
   }, [questions, selectedTag]);
 
+  const availableOptionalPapers = useMemo(() => {
+    const papers = new Set(["Paper 1", "Paper 2"]);
+    if (hierarchyData) {
+      const knownTags = new Set();
+      if (hierarchyData.gsModules) {
+        Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
+          knownTags.add(mod);
+          if (Array.isArray(sections)) {
+            sections.forEach(secItem => {
+              if (secItem.section) knownTags.add(secItem.section);
+              if (secItem.topics && Array.isArray(secItem.topics)) {
+                secItem.topics.forEach(topicItem => {
+                  if (topicItem.title) knownTags.add(topicItem.title);
+                });
+              }
+            });
+          }
+        });
+      }
+      if (hierarchyData.optionalSubjects) {
+        Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
+          knownTags.add(sub);
+          if (Array.isArray(sections)) {
+            sections.forEach(secItem => {
+              if (secItem.section) knownTags.add(secItem.section);
+              if (secItem.topics && Array.isArray(secItem.topics)) {
+                secItem.topics.forEach(topicItem => {
+                  if (topicItem.title) knownTags.add(topicItem.title);
+                });
+              }
+            });
+          }
+        });
+      }
+      
+      questions.forEach(q => {
+        if (q.tags && Array.isArray(q.tags)) {
+          q.tags.forEach(tag => {
+            if (!knownTags.has(tag)) {
+              papers.add(tag);
+            }
+          });
+        }
+      });
+    }
+    return Array.from(papers).sort();
+  }, [questions, hierarchyData]);
+
   const handleDownloadPdf = () => {
     if (displayedQuestions.length === 0) return;
     
@@ -458,54 +506,6 @@ export default function ViewPage() {
   }
 
   // Derive Dropdown Options dynamically while editing
-  const availableOptionalPapers = useMemo(() => {
-    const papers = new Set(["Paper 1", "Paper 2"]);
-    if (hierarchyData) {
-      const knownTags = new Set();
-      if (hierarchyData.gsModules) {
-        Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
-          knownTags.add(mod);
-          if (Array.isArray(sections)) {
-            sections.forEach(secItem => {
-              if (secItem.section) knownTags.add(secItem.section);
-              if (secItem.topics && Array.isArray(secItem.topics)) {
-                secItem.topics.forEach(topicItem => {
-                  if (topicItem.title) knownTags.add(topicItem.title);
-                });
-              }
-            });
-          }
-        });
-      }
-      if (hierarchyData.optionalSubjects) {
-        Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
-          knownTags.add(sub);
-          if (Array.isArray(sections)) {
-            sections.forEach(secItem => {
-              if (secItem.section) knownTags.add(secItem.section);
-              if (secItem.topics && Array.isArray(secItem.topics)) {
-                secItem.topics.forEach(topicItem => {
-                  if (topicItem.title) knownTags.add(topicItem.title);
-                });
-              }
-            });
-          }
-        });
-      }
-      
-      questions.forEach(q => {
-        if (q.tags && Array.isArray(q.tags)) {
-          q.tags.forEach(tag => {
-            if (!knownTags.has(tag)) {
-              papers.add(tag);
-            }
-          });
-        }
-      });
-    }
-    return Array.from(papers).sort();
-  }, [questions, hierarchyData]);
-
   let availableSections = [];
   let availableTopics = [];
   if (editModule && hierarchyData.gsModules[editModule]) {
