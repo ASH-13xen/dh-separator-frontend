@@ -57,8 +57,6 @@ export default function ViewPage() {
         setEditOptionalPaper('');
         setEditOptionalSection('');
         setEditOptionalTopic('');
-      } else if (type === 'optionalPaper') {
-        setEditOptionalPaper(value);
       } else if (type === 'optionalSection') {
         setEditOptionalSection(value);
         setEditOptionalTopic('');
@@ -172,8 +170,6 @@ export default function ViewPage() {
         setEditOptionalPaper('');
         setEditOptionalSection('');
         setEditOptionalTopic('');
-      } else if (addTagType === 'optionalPaper') {
-        setEditOptionalPaper(createdName);
       } else if (addTagType === 'optionalSection') {
         setEditOptionalSection(createdName);
         setEditOptionalTopic('');
@@ -195,7 +191,6 @@ export default function ViewPage() {
     else if (addTagType === 'gsSection') setEditSection(addTagPrevValue);
     else if (addTagType === 'gsTopic') setEditTopic(addTagPrevValue);
     else if (addTagType === 'optionalSubject') setEditOptional(addTagPrevValue);
-    else if (addTagType === 'optionalPaper') setEditOptionalPaper(addTagPrevValue);
     else if (addTagType === 'optionalSection') setEditOptionalSection(addTagPrevValue);
     else if (addTagType === 'optionalTopic') setEditOptionalTopic(addTagPrevValue);
     
@@ -234,53 +229,7 @@ export default function ViewPage() {
     });
   }, [questions, selectedTag]);
 
-  const availableOptionalPapers = useMemo(() => {
-    const papers = new Set(["Paper 1", "Paper 2"]);
-    if (hierarchyData) {
-      const knownTags = new Set();
-      if (hierarchyData.gsModules) {
-        Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
-          knownTags.add(mod);
-          if (Array.isArray(sections)) {
-            sections.forEach(secItem => {
-              if (secItem.section) knownTags.add(secItem.section);
-              if (secItem.topics && Array.isArray(secItem.topics)) {
-                secItem.topics.forEach(topicItem => {
-                  if (topicItem.title) knownTags.add(topicItem.title);
-                });
-              }
-            });
-          }
-        });
-      }
-      if (hierarchyData.optionalSubjects) {
-        Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
-          knownTags.add(sub);
-          if (Array.isArray(sections)) {
-            sections.forEach(secItem => {
-              if (secItem.section) knownTags.add(secItem.section);
-              if (secItem.topics && Array.isArray(secItem.topics)) {
-                secItem.topics.forEach(topicItem => {
-                  if (topicItem.title) knownTags.add(topicItem.title);
-                });
-              }
-            });
-          }
-        });
-      }
-      
-      questions.forEach(q => {
-        if (q.tags && Array.isArray(q.tags)) {
-          q.tags.forEach(tag => {
-            if (!knownTags.has(tag)) {
-              papers.add(tag);
-            }
-          });
-        }
-      });
-    }
-    return Array.from(papers).sort();
-  }, [questions, hierarchyData]);
+  const availableOptionalPapers = ["Paper 1", "Paper 2", "Paper 3", "Paper 4"];
 
   const handleDownloadPdf = () => {
     if (displayedQuestions.length === 0) return;
@@ -381,44 +330,10 @@ export default function ViewPage() {
         }
         
         if (foundOpt) {
-            // Find all known syllabus hierarchy tags
-            const knownTags = new Set();
-            if (hierarchyData.gsModules) {
-              Object.entries(hierarchyData.gsModules).forEach(([mod, sections]) => {
-                knownTags.add(mod);
-                if (Array.isArray(sections)) {
-                  sections.forEach(secItem => {
-                    if (secItem.section) knownTags.add(secItem.section);
-                    if (secItem.topics && Array.isArray(secItem.topics)) {
-                      secItem.topics.forEach(topicItem => {
-                        if (topicItem.title) knownTags.add(topicItem.title);
-                      });
-                    }
-                  });
-                }
-              });
-            }
-            if (hierarchyData.optionalSubjects) {
-              Object.entries(hierarchyData.optionalSubjects).forEach(([sub, sections]) => {
-                knownTags.add(sub);
-                if (Array.isArray(sections)) {
-                  sections.forEach(secItem => {
-                    if (secItem.section) knownTags.add(secItem.section);
-                    if (secItem.topics && Array.isArray(secItem.topics)) {
-                      secItem.topics.forEach(topicItem => {
-                        if (topicItem.title) knownTags.add(topicItem.title);
-                      });
-                    }
-                  });
-                }
-              });
-            }
-
-            // The paper is any tag of this question that is not a known hierarchy tag
-            const paperTag = tags.find(t => !knownTags.has(t));
-            if (paperTag) {
-                foundOptPaper = paperTag;
-            }
+            if (tags.includes('Paper 1')) foundOptPaper = 'Paper 1';
+            else if (tags.includes('Paper 2')) foundOptPaper = 'Paper 2';
+            else if (tags.includes('Paper 3')) foundOptPaper = 'Paper 3';
+            else if (tags.includes('Paper 4')) foundOptPaper = 'Paper 4';
 
             const sections = hierarchyData.optionalSubjects[foundOpt];
             for (const secObj of sections) {
@@ -675,14 +590,13 @@ export default function ViewPage() {
                                         <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Paper</label>
                                         <select
                                             value={editOptionalPaper}
-                                            onChange={(e) => handleSelectChange('optionalPaper', e.target.value, editOptionalPaper)}
+                                            onChange={(e) => setEditOptionalPaper(e.target.value)}
                                             className="w-full bg-gray-800 border border-teal-500/50 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-teal-400 cursor-pointer"
                                         >
                                             <option value="">-- None --</option>
                                             {availableOptionalPapers.map((paper, i) => (
                                                 <option key={i} value={paper}>{paper}</option>
                                             ))}
-                                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
                                         </select>
                                     </div>
                                     )}
