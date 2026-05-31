@@ -145,3 +145,69 @@ export const deleteQuesPdf = async (id) => {
     throw error.response?.data || { error: 'Failed to delete QuesPDF record.' };
   }
 };
+
+export const processReorderPdf = async (file) => {
+  const formData = new FormData();
+  formData.append('pdf', file);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/reorder/process`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error processing PDF for reorder:", error);
+    throw error.response?.data || { error: 'An unexpected error occurred during PDF processing.' };
+  }
+};
+
+export const fetchReorderHistory = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/reorder/history`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching reorder history:", error);
+    throw error.response?.data || { error: 'Failed to retrieve reorder history.' };
+  }
+};
+
+export const fetchReorderRecord = async (id) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/reorder/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching reorder record:", error);
+    throw error.response?.data || { error: 'Failed to retrieve reorder record.' };
+  }
+};
+
+export const updateReorderRecord = async (id, chunks) => {
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/reorder/${id}`, { chunks });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating reorder record:", error);
+    throw error.response?.data || { error: 'Failed to update record.' };
+  }
+};
+
+export const compileReorderPdf = async (id) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/reorder/${id}/compile`);
+    return response.data;
+  } catch (error) {
+    console.error("Error compiling PDF:", error);
+    throw error.response?.data || { error: 'Failed to compile reordered PDF.' };
+  }
+};
+
+export const deleteReorderRecord = async (id) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/reorder/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting reorder record:", error);
+    throw error.response?.data || { error: 'Failed to delete record.' };
+  }
+};

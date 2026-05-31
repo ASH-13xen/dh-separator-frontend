@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import UploadPage from './pages/UploadPage';
+import ReorderPage from './pages/ReorderPage';
 import QuesPdfPage from './pages/QuesPdfPage';
 import ViewPage from './pages/ViewPage';
 import CollectivePage from './pages/CollectivePage';
 import ManualPage from './pages/ManualPage';
-import { UploadCloud, Library, BookOpen, FileEdit, FileText } from 'lucide-react';
+import { UploadCloud, Library, BookOpen, FileEdit, FileText, ArrowUpDown } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload');
@@ -34,6 +35,12 @@ function App() {
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'upload' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
               >
                 <UploadCloud className="w-4 h-4" /> Upload
+              </button>
+              <button 
+                onClick={() => setActiveTab('reorder')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'reorder' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+              >
+                <ArrowUpDown className="w-4 h-4" /> Split & Reorder
               </button>
               <button 
                 onClick={() => setActiveTab('quespdf')}
@@ -73,6 +80,7 @@ function App() {
             persistedError={uploadError} setPersistedError={setUploadError}
           />
         )}
+        {activeTab === 'reorder' && <ReorderPage />}
         {activeTab === 'quespdf' && <QuesPdfPage />}
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
