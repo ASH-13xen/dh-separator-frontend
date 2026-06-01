@@ -192,9 +192,9 @@ export const updateReorderRecord = async (id, chunks) => {
   }
 };
 
-export const compileReorderPdf = async (id) => {
+export const compileReorderPdf = async (id, subject) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/reorder/${id}/compile`);
+    const response = await axios.post(`${API_BASE_URL}/api/reorder/${id}/compile`, { subject });
     return response.data;
   } catch (error) {
     console.error("Error compiling PDF:", error);

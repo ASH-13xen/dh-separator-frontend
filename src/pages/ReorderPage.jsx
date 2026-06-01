@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   UploadCloud, FileText, CheckCircle2, Loader2, AlertTriangle, 
   Download, Trash2, Edit2, Save, X, History, Calendar, ExternalLink,
-  ArrowUp, ArrowDown, GripVertical, RefreshCw, Eye, Sparkles
+  ArrowUp, ArrowDown, GripVertical, RefreshCw, Eye, Sparkles, ArrowRight
 } from 'lucide-react';
 import { 
   processReorderPdf, 
   fetchReorderHistory, 
   updateReorderRecord, 
   compileReorderPdf, 
-  deleteReorderRecord 
+  deleteReorderRecord,
+  fetchTags
 } from '../services/api';
 
 export default function ReorderPage() {
@@ -32,9 +33,18 @@ export default function ReorderPage() {
   // PDF Preview url for the side iframe modal
   const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
 
-  // Load history on mount
+  // Subject Selection Modal States
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+
+  // Load history and tags on mount
   useEffect(() => {
     loadHistory();
+    fetchTags().then(tags => {
+      const modules = tags.filter(t => t.startsWith('GS-') || t.startsWith('OptionalSubject'));
+      setAvailableSubjects(modules.sort());
+    }).catch(console.error);
   }, []);
 
   const loadHistory = async () => {
@@ -197,17 +207,17 @@ export default function ReorderPage() {
     }
   };
 
-  const handleCompile = async () => {
+  const handleCompile = async (subjectVal) => {
     if (!currentRecord) return;
     setIsCompiling(true);
     setCompileStep(1); // 1. Initializing
 
-    const timer1 = setTimeout(() => setCompileStep(2), 2000); // 2. Downloading
-    const timer2 = setTimeout(() => setCompileStep(3), 5000); // 3. Merging
-    const timer3 = setTimeout(() => setCompileStep(4), 8500); // 4. Finalizing
+    const timer1 = setTimeout(() => setCompileStep(2), 2000); // 2. Tagging & Downloading
+    const timer2 = setTimeout(() => setCompileStep(3), 6000); // 3. Structuring & Merging
+    const timer3 = setTimeout(() => setCompileStep(4), 11000); // 4. Finalizing
 
     try {
-      const response = await compileReorderPdf(currentRecord._id);
+      const response = await compileReorderPdf(currentRecord._id, subjectVal);
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
@@ -396,7 +406,7 @@ export default function ReorderPage() {
                   <X className="w-4 h-4" /> Close
                 </button>
                 <button
-                  onClick={handleCompile}
+                  onClick={() => { setSelectedSubject(''); setShowSubjectModal(true); }}
                   disabled={currentRecord.chunks.length === 0}
                   className="bg-violet-650 hover:bg-violet-500 disabled:opacity-50 text-white font-extrabold py-2.5 px-6 rounded-xl shadow-[0_0_15px_rgba(139,92,246,0.2)] transition-all flex items-center gap-2 text-sm"
                 >
@@ -670,6 +680,56 @@ export default function ReorderPage() {
                 className="w-full h-full border-0" 
                 title="Segment PDF Preview" 
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subject Selection Modal */}
+      {showSubjectModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-gray-900 border border-gray-700 p-8 rounded-3xl shadow-2xl max-w-md w-full space-y-6 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+              <Sparkles className="w-6 h-6 text-violet-400 animate-pulse" />
+              <div>
+                <h3 className="text-xl font-bold text-white">Select Subject for Tagging</h3>
+                <p className="text-xs text-gray-400">Questions will be tagged and compiled into a book</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Target Subject / Module</label>
+              <select
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500 cursor-pointer transition-all"
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+              >
+                <option value="" disabled>-- Choose a Subject --</option>
+                {availableSubjects.map(sub => (
+                  <option key={sub} value={sub}>
+                    {sub.replace(/([a-z])([A-Z])/g, '$1 $2').replace('OptionalSubject', 'Optional: ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+              <button
+                onClick={() => setShowSubjectModal(false)}
+                className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl transition-all text-sm font-bold border border-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!selectedSubject}
+                onClick={() => {
+                  setShowSubjectModal(false);
+                  handleCompile(selectedSubject);
+                }}
+                className="px-6 py-2.5 bg-gradient-to-r from-violet-650 to-indigo-650 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-xl shadow-lg transition-all text-sm flex items-center gap-2"
+              >
+                Tag & Compile <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
