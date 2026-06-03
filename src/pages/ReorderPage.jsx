@@ -310,7 +310,7 @@ export default function ReorderPage() {
             <div className="space-y-4">
               <h3 className="text-2xl font-bold text-white">Analyzing & Splitting PDF</h3>
               <p className="text-gray-400 text-sm max-w-md mx-auto">
-                Gemini is identifying questions and page ranges, then we split and cache your segments safely on Cloudinary.
+                Gemini is identifying questions and page ranges, then we split and cache your segments safely on the local server disk.
               </p>
             </div>
 
@@ -320,7 +320,7 @@ export default function ReorderPage() {
                 { label: "Uploading file buffer to parsing pipeline", step: 1 },
                 { label: "Gemini executing page-by-page QA boundaries search", step: 2 },
                 { label: "Splitting PDF pages into distinct chunk files", step: 3 },
-                { label: "Caching individual PDF chunks to Cloudinary", step: 4 }
+                { label: "Caching individual PDF chunks locally on disk", step: 4 }
               ].map((s) => (
                 <div key={s.step} className="flex items-center gap-3">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
@@ -357,7 +357,7 @@ export default function ReorderPage() {
                 {[
                   { label: "Downloading sequence chunks", step: 2 },
                   { label: "Merging PDF buffers using pdf-lib", step: 3 },
-                  { label: "Uploading final document to Cloudinary", step: 4 }
+                  { label: "Saving final document to local server disk", step: 4 }
                 ].map((s) => (
                   <div key={s.step} className="flex items-center gap-3">
                     <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
