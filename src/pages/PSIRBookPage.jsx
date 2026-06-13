@@ -270,7 +270,7 @@ export default function PSIRBookPage() {
 
         if (jobData.status === 'completed') {
           clearInterval(intervalId);
-          setPdfBlobUrl(jobData.pdfUrl);
+          setPdfBlobUrl(`${API_BASE_URL}/api/psir/download/${jobId}`);
           setIsGenerating(false);
           setShowPreviewModal(true);
         } else if (jobData.status === 'failed') {
