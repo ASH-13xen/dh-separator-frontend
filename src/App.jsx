@@ -5,10 +5,11 @@ import QuesPdfPage from './pages/QuesPdfPage';
 import ViewPage from './pages/ViewPage';
 import CollectivePage from './pages/CollectivePage';
 import ManualPage from './pages/ManualPage';
+import PSIRBookPage from './pages/PSIRBookPage';
 import { UploadCloud, Library, BookOpen, FileEdit, FileText, ArrowUpDown } from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('upload');
+  const [activeTab, setActiveTab] = useState('collective');
 
   // Lifted State for UploadPage
   const [uploadFile, setUploadFile] = useState(null);
@@ -29,42 +30,48 @@ function App() {
              <span className="font-extrabold text-xl tracking-tight text-white hidden md:block">UPSC Hub</span>
            </div>
 
-           <div className="flex bg-gray-900 border border-gray-800 p-1 rounded-xl">
-              <button 
-                onClick={() => setActiveTab('upload')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'upload' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-              >
-                <UploadCloud className="w-4 h-4" /> Upload
-              </button>
-              <button 
-                onClick={() => setActiveTab('reorder')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'reorder' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-              >
-                <ArrowUpDown className="w-4 h-4" /> Split & Reorder
-              </button>
-              <button 
-                onClick={() => setActiveTab('quespdf')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'quespdf' ? 'bg-teal-650 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-              >
-                <FileText className="w-4 h-4" /> QuesPDF Maker
-              </button>
-              <button 
-                onClick={() => setActiveTab('view')}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'view' ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+           <div className="flex bg-gray-900 border border-gray-800 p-1 rounded-xl gap-1">
+             <button 
+               onClick={() => setActiveTab('upload')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'upload' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
              >
-               <Library className="w-4 h-4" /> View Library
+               <UploadCloud className="w-4 h-4" /> Upload
+             </button>
+             <button 
+               onClick={() => setActiveTab('reorder')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'reorder' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <ArrowUpDown className="w-4 h-4" /> Reorder
+             </button>
+             <button 
+               onClick={() => setActiveTab('quespdf')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'quespdf' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <FileEdit className="w-4 h-4" /> Extract Qs
+             </button>
+             <button 
+               onClick={() => setActiveTab('manual')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'manual' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <FileText className="w-4 h-4" /> Manual Mapping
              </button>
              <button 
                onClick={() => setActiveTab('collective')}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'collective' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'collective' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
              >
                <BookOpen className="w-4 h-4" /> Collective Book
              </button>
              <button 
-               onClick={() => setActiveTab('manual')}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-orange-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+               onClick={() => setActiveTab('psir')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'psir' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
              >
-               <FileEdit className="w-4 h-4" /> Manual Questions
+               <BookOpen className="w-4 h-4" /> PSIR Book
+             </button>
+             <button 
+               onClick={() => setActiveTab('view')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'view' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <FileText className="w-4 h-4" /> Library Viewer
              </button>
            </div>
            
@@ -84,6 +91,7 @@ function App() {
         {activeTab === 'quespdf' && <QuesPdfPage />}
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
+        {activeTab === 'psir' && <PSIRBookPage />}
         {activeTab === 'manual' && <ManualPage />}
       </div>
 

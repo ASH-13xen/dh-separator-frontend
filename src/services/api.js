@@ -100,9 +100,12 @@ export const addCustomTag = async (tagData) => {
   }
 };
 
-export const processQuesPdf = async (file) => {
+export const processQuesPdf = async (file, startPage, endPage, chunkSize) => {
   const formData = new FormData();
   formData.append('pdf', file);
+  if (startPage) formData.append('startPage', startPage);
+  if (endPage) formData.append('endPage', endPage);
+  if (chunkSize) formData.append('chunkSize', chunkSize);
   try {
     const response = await axios.post(`${API_BASE_URL}/api/quespdf/process`, formData, {
       headers: {

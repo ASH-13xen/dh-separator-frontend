@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Download, Loader2, ArrowRight, UserCheck, AlertTriangle, CheckSquare, Square, Eye, FileText, GripVertical } from 'lucide-react';
-import { fetchTags } from '../services/api';
+import { fetchHierarchy } from '../services/api';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -26,9 +26,10 @@ export default function CollectivePage() {
   const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
 
   useEffect(() => {
-     fetchTags().then(tags => {
-         // Filter tags to only show Top-Level Modules (GS and Optionals)
-         const modules = tags.filter(t => t.startsWith('GS-') || t.startsWith('OptionalSubject'));
+     fetchHierarchy().then(data => {
+         const gsKeys = Object.keys(data.gsModules || {});
+         const optKeys = Object.keys(data.optionalSubjects || {});
+         const modules = [...gsKeys, ...optKeys];
          setAvailableModules(modules.sort());
      }).catch(console.error);
   }, []);
@@ -41,11 +42,27 @@ export default function CollectivePage() {
         const response = await fetch(`${API_BASE_URL}/api/collective/preview?moduleName=${encodeURIComponent(selectedModule)}`);
         
         if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to fetch module layout.');
+            let errorMsg = 'Failed to fetch module layout.';
+            try {
+                const errData = await response.json();
+                errorMsg = errData.error || errorMsg;
+            } catch (jsonErr) {
+                try {
+                    const text = await response.text();
+                    errorMsg = text.length > 200 ? text.substring(0, 200) + '...' : text;
+                } catch (textErr) {
+                    errorMsg = `Server error (${response.status}): ${response.statusText || 'Unknown'}`;
+                }
+            }
+            throw new Error(errorMsg);
         }
 
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (jsonErr) {
+            throw new Error('Response is not valid JSON. Please check backend server.');
+        }
         setPreviewData(data); // hierarchical data
 
         const initSelects = {};
@@ -157,6 +174,19 @@ export default function CollectivePage() {
                 });
             });
         });
+        if (orderedIncludedIds.length === 0) {
+            throw new Error('Please select at least one question to include in the book.');
+        }
+
+        if (orderedIncludedIds.length > 30) {
+            const proceed = window.confirm(
+                `You have selected ${orderedIncludedIds.length} questions. Generating a book with more than 30 questions may take a long time and could potentially fail or time out. Do you want to proceed anyway?`
+            );
+            if (!proceed) {
+                setIsGenerating(false);
+                return;
+            }
+        }
 
         const response = await fetch(`${API_BASE_URL}/api/collective/generate`, {
             method: 'POST',
@@ -171,8 +201,19 @@ export default function CollectivePage() {
         });
 
         if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to generate collective PDF.');
+            let errorMsg = 'Failed to generate collective PDF.';
+            try {
+                const errData = await response.json();
+                errorMsg = errData.error || errorMsg;
+            } catch (jsonErr) {
+                try {
+                    const text = await response.text();
+                    errorMsg = text.length > 200 ? text.substring(0, 200) + '...' : text;
+                } catch (textErr) {
+                    errorMsg = `Server error (${response.status}): ${response.statusText || 'Unknown'}`;
+                }
+            }
+            throw new Error(errorMsg);
         }
 
         const blob = await response.blob();

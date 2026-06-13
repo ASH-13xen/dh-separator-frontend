@@ -16,6 +16,11 @@ export default function QuesPdfPage() {
   const [history, setHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
+  // Page range targeting states
+  const [startPage, setStartPage] = useState('');
+  const [endPage, setEndPage] = useState('');
+  const [chunkSize, setChunkSize] = useState('50');
+  
   // Inline editing state
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editingText, setEditingText] = useState('');
@@ -78,7 +83,7 @@ export default function QuesPdfPage() {
     const timer3 = setTimeout(() => setProgressStep(4), 16000); // 4. Saving
 
     try {
-      const result = await processQuesPdf(file);
+      const result = await processQuesPdf(file, startPage, endPage, chunkSize);
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
@@ -86,6 +91,9 @@ export default function QuesPdfPage() {
       
       setCurrentRecord(result.data);
       setFile(null);
+      setStartPage('');
+      setEndPage('');
+      setChunkSize('50');
       // Reload history to include the new one
       loadHistory();
     } catch (err) {
@@ -196,13 +204,52 @@ export default function QuesPdfPage() {
             )}
 
             {file && (
-              <div className="flex justify-center mt-8">
-                <button
-                  onClick={handleProcess}
-                  className="bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white font-extrabold py-4 px-12 rounded-xl shadow-[0_0_25px_rgba(20,184,166,0.3)] hover:shadow-[0_0_35px_rgba(20,184,166,0.5)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2 text-lg"
-                >
-                  <CheckCircle2 className="w-5 h-5" /> Process & Inject Questions
-                </button>
+              <div className="mt-8 space-y-6 border-t border-gray-700/50 pt-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
+                  <div className="space-y-2 text-left">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">Start Page</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="1 (First)"
+                      value={startPage}
+                      onChange={(e) => setStartPage(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 hover:border-gray-600 focus:border-teal-500 focus:outline-none rounded-xl px-4 py-3 text-white transition-all text-sm font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-2 text-left">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">End Page</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Total (Last)"
+                      value={endPage}
+                      onChange={(e) => setEndPage(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 hover:border-gray-600 focus:border-teal-500 focus:outline-none rounded-xl px-4 py-3 text-white transition-all text-sm font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-2 text-left">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">Pages Per Chunk</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="200"
+                      placeholder="50"
+                      value={chunkSize}
+                      onChange={(e) => setChunkSize(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 hover:border-gray-600 focus:border-teal-500 focus:outline-none rounded-xl px-4 py-3 text-white transition-all text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={handleProcess}
+                    className="bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white font-extrabold py-4 px-12 rounded-xl shadow-[0_0_25px_rgba(20,184,166,0.3)] hover:shadow-[0_0_35px_rgba(20,184,166,0.5)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2 text-lg"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> Process & Inject Questions
+                  </button>
+                </div>
               </div>
             )}
           </div>
