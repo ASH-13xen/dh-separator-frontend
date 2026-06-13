@@ -24,6 +24,9 @@ export default function PSIRBookPage() {
   // PDF Preview Urls
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
+
+  // GitHub Actions compilation job states
+  const [generationStatus, setGenerationStatus] = useState('pending');
   
   // Collapsed Topics state: { topicTitle: boolean }
   const [collapsedTopics, setCollapsedTopics] = useState({});
@@ -199,6 +202,7 @@ export default function PSIRBookPage() {
   const generateAndPreviewPdf = async () => {
     if (!activePaperNode) return;
     setIsGenerating(true);
+    setGenerationStatus('pending');
     setPdfBlobUrl(null);
     try {
       // Collect included question IDs in custom order
@@ -215,9 +219,9 @@ export default function PSIRBookPage() {
         throw new Error('Please select at least one question to include in the book.');
       }
 
-      if (orderedIncludedIds.length > 30) {
+      if (orderedIncludedIds.length > 35) {
         const proceed = window.confirm(
-          `You have selected ${orderedIncludedIds.length} questions. Generating a book with more than 30 questions may take a long time and could potentially fail or time out. Do you want to proceed anyway?`
+          `You have selected ${orderedIncludedIds.length} questions. Generating a book with more than 35 questions may take a long time. Do you want to proceed?`
         );
         if (!proceed) {
           setIsGenerating(false);
@@ -239,28 +243,79 @@ export default function PSIRBookPage() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || 'Failed to generate PDF book.');
+        throw new Error(errData.error || 'Failed to start PDF book generation.');
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setPdfBlobUrl(url);
-      setShowPreviewModal(true);
+      const data = await response.json();
+      const jobId = data.jobId;
+      console.log(`PDF compilation job created successfully. Job ID: ${jobId}`);
+      
+      // Start polling for status
+      pollJobStatus(jobId);
     } catch (err) {
       alert(err.message);
-    } finally {
       setIsGenerating(false);
     }
   };
 
-  const downloadFinalPdf = () => {
+  const pollJobStatus = (jobId) => {
+    const intervalId = setInterval(async () => {
+      try {
+        const statusResponse = await fetch(`${API_BASE_URL}/api/psir/status/${jobId}`);
+        if (!statusResponse.ok) {
+          throw new Error('Failed to retrieve compilation progress.');
+        }
+        const jobData = await statusResponse.json();
+        setGenerationStatus(jobData.status);
+
+        if (jobData.status === 'completed') {
+          clearInterval(intervalId);
+          setPdfBlobUrl(jobData.pdfUrl);
+          setIsGenerating(false);
+          setShowPreviewModal(true);
+        } else if (jobData.status === 'failed') {
+          clearInterval(intervalId);
+          setIsGenerating(false);
+          alert(`PDF Generation failed on the server: ${jobData.error || 'Unknown error'}`);
+        }
+      } catch (err) {
+        console.error("Error polling job status:", err);
+        clearInterval(intervalId);
+        setIsGenerating(false);
+        alert(err.message);
+      }
+    }, 4000);
+  };
+
+  const downloadFinalPdf = async () => {
     if (!pdfBlobUrl) return;
-    const link = document.createElement('a');
-    link.href = pdfBlobUrl;
-    link.download = `Formal_PSIR_${activePaper.replace(/[^a-z0-9]/gi, '_')}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      if (pdfBlobUrl.startsWith('blob:')) {
+        const link = document.createElement('a');
+        link.href = pdfBlobUrl;
+        link.download = `Formal_PSIR_${activePaper.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+      
+      // Force direct download for remote Cloudinary URLs by fetching first to bypass browser cross-origin same-site restrictions
+      const response = await fetch(pdfBlobUrl);
+      const blob = await response.blob();
+      const localUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = localUrl;
+      link.download = `Formal_PSIR_${activePaper.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(localUrl);
+    } catch (err) {
+      console.error("Failed to download PDF cleanly, opening in new tab:", err);
+      window.open(pdfBlobUrl, '_blank');
+    }
   };
 
   const getCleanUrl = (url) => {
@@ -591,6 +646,50 @@ export default function PSIRBookPage() {
               >
                 <Download className="w-4 h-4" /> Download PDF Book
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GitHub Actions Progress Modal */}
+      {isGenerating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95">
+            <div className="relative mb-6">
+              <div className="w-16 h-16 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <BookOpen className="w-6 h-6 text-indigo-400 animate-pulse" />
+              </div>
+            </div>
+            
+            <h3 className="text-lg font-bold text-white mb-2">Generating PDF Book</h3>
+            <p className="text-gray-400 text-xs mb-6 max-w-xs leading-relaxed">
+              We have offloaded PDF compilation to GitHub Actions. This prevents server timeouts and ensures high performance.
+            </p>
+            
+            <div className="w-full bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col gap-3.5 mb-6 text-left">
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${generationStatus === 'pending' ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                <span className={`text-xs font-bold ${generationStatus === 'pending' ? 'text-white' : 'text-gray-400'}`}>
+                  1. Queueing job in GitHub Actions
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${generationStatus === 'processing' ? 'bg-indigo-500 animate-pulse' : generationStatus === 'completed' ? 'bg-green-500' : 'bg-gray-800'}`} />
+                <span className={`text-xs font-bold ${generationStatus === 'processing' ? 'text-white' : generationStatus === 'completed' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  2. Downloading & merging topper sheets
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${generationStatus === 'completed' ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}`} />
+                <span className={`text-xs font-bold ${generationStatus === 'completed' ? 'text-white' : 'text-gray-600'}`}>
+                  3. Uploading completed book
+                </span>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-black">
+              Status: <span className={generationStatus === 'failed' ? 'text-red-500' : generationStatus === 'completed' ? 'text-green-500' : 'text-indigo-400'}>{generationStatus.toUpperCase()}</span>
             </div>
           </div>
         </div>
