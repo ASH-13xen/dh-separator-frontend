@@ -20,6 +20,7 @@ export default function PSIRBookPage() {
   const [editingTopicValue, setEditingTopicValue] = useState('');
   const [editingTopper, setEditingTopper] = useState(null); // { tIndex, qIndex, fIndex }
   const [editingTopperValues, setEditingTopperValues] = useState({});
+  const [positionDrafts, setPositionDrafts] = useState({}); // { [questionId]: rawInputString }
 
   useEffect(() => { fetchPsirPreview(); }, []);
 
@@ -94,19 +95,48 @@ export default function PSIRBookPage() {
     setCollapsedTopics(prev => ({ ...prev, [topicTitle]: prev[topicTitle] !== false ? false : true }));
   };
 
-  // Move question up (-1) or down (+1) within its topic
-  const moveQuestion = (tIndex, qIndex, direction) => {
-    const targetIndex = qIndex + direction;
+  // Move a question to an arbitrary 0-based position within its topic
+  const moveQuestionToPosition = (tIndex, fromIndex, toIndex) => {
     setPsirData(prev => {
       const newData = [...prev];
       const paperIdx = newData.findIndex(p => p.paper === activePaper);
       if (paperIdx === -1) return prev;
       const newTopics = [...newData[paperIdx].topics];
       const questions = [...newTopics[tIndex].questions];
-      if (targetIndex < 0 || targetIndex >= questions.length) return prev;
-      [questions[qIndex], questions[targetIndex]] = [questions[targetIndex], questions[qIndex]];
+      if (toIndex < 0 || toIndex >= questions.length || toIndex === fromIndex) return prev;
+      const [moved] = questions.splice(fromIndex, 1);
+      questions.splice(toIndex, 0, moved);
       newTopics[tIndex] = { ...newTopics[tIndex], questions };
       newData[paperIdx] = { ...newData[paperIdx], topics: newTopics };
+      return newData;
+    });
+  };
+
+  // Commit a typed "jump to position" value for a question, then clear its draft
+  const commitPositionChange = (tIndex, qIndex, qId, rawValue, totalInTopic) => {
+    const parsed = parseInt(rawValue, 10);
+    if (!Number.isNaN(parsed)) {
+      const clamped = Math.min(Math.max(parsed, 1), totalInTopic);
+      moveQuestionToPosition(tIndex, qIndex, clamped - 1);
+    }
+    setPositionDrafts(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+  };
+
+  // Move topic up (-1) or down (+1) within the active paper
+  const moveTopic = (tIndex, direction) => {
+    const targetIndex = tIndex + direction;
+    setPsirData(prev => {
+      const newData = [...prev];
+      const paperIdx = newData.findIndex(p => p.paper === activePaper);
+      if (paperIdx === -1) return prev;
+      const topics = [...newData[paperIdx].topics];
+      if (targetIndex < 0 || targetIndex >= topics.length) return prev;
+      [topics[tIndex], topics[targetIndex]] = [topics[targetIndex], topics[tIndex]];
+      newData[paperIdx] = { ...newData[paperIdx], topics };
       return newData;
     });
   };
@@ -210,7 +240,9 @@ export default function PSIRBookPage() {
   const downloadFinalPdf = async () => {
     if (!pdfBlobUrl) return;
     try {
-      const response = await fetch(pdfBlobUrl);
+      // ?download=true marks this as an explicit download so the server deletes the
+      // GridFS file afterward; the preview iframe omits this and never consumes it.
+      const response = await fetch(`${pdfBlobUrl}?download=true`);
       const blob = await response.blob();
       const localUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -222,7 +254,7 @@ export default function PSIRBookPage() {
       window.URL.revokeObjectURL(localUrl);
     } catch (err) {
       console.error('Download failed:', err);
-      window.open(pdfBlobUrl, '_blank');
+      window.open(`${pdfBlobUrl}?download=true`, '_blank');
     }
   };
 
@@ -297,7 +329,7 @@ export default function PSIRBookPage() {
                   <span className="text-[10px] text-indigo-400 uppercase font-black tracking-widest">Selected Paper Section</span>
                   <h2 className="text-xl font-bold text-white mt-0.5">{activePaperNode.section}</h2>
                   <p className="text-xs text-gray-400 mt-1">
-                    Manage {totalActiveQuestions} questions grouped by topics. Use ↑↓ buttons to reorder questions within a topic.
+                    Manage {totalActiveQuestions} questions grouped by topics. Type a position number next to a question to move it there instantly. Use ↑↓ to move whole topics up/down.
                   </p>
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0 w-full md:w-auto justify-between md:justify-end">
@@ -341,6 +373,26 @@ export default function PSIRBookPage() {
                             ? <ChevronRight className="w-5 h-5 text-gray-500 flex-shrink-0" />
                             : <ChevronDown className="w-5 h-5 text-gray-500 flex-shrink-0" />
                           }
+
+                          {/* Topic Up / Down buttons */}
+                          <div className="flex flex-col gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => moveTopic(tIndex, -1)}
+                              disabled={tIndex === 0}
+                              className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors cursor-pointer"
+                              title="Move topic up"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => moveTopic(tIndex, 1)}
+                              disabled={tIndex === activePaperNode.topics.length - 1}
+                              className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors cursor-pointer"
+                              title="Move topic down"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
 
                           {isEditingThisTopic ? (
                             <div className="flex items-center gap-2 flex-1" onClick={e => e.stopPropagation()}>
@@ -406,24 +458,23 @@ export default function PSIRBookPage() {
                                 } hover:border-indigo-400/60`}
                               >
                                 <div className="flex items-start gap-3 mb-3">
-                                  {/* Up / Down buttons */}
-                                  <div className="flex flex-col gap-1 flex-shrink-0 mt-0.5">
-                                    <button
-                                      onClick={() => moveQuestion(tIndex, qIndex, -1)}
-                                      disabled={qIndex === 0}
-                                      className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors cursor-pointer"
-                                      title="Move up"
-                                    >
-                                      <ArrowUp className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={() => moveQuestion(tIndex, qIndex, 1)}
-                                      disabled={qIndex === topNode.questions.length - 1}
-                                      className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors cursor-pointer"
-                                      title="Move down"
-                                    >
-                                      <ArrowDown className="w-3 h-3" />
-                                    </button>
+                                  {/* Jump-to-position control */}
+                                  <div className="flex flex-col items-center flex-shrink-0 mt-0.5 gap-0.5">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={topNode.questions.length}
+                                      value={positionDrafts[q._id] ?? String(qIndex + 1)}
+                                      onChange={e => setPositionDrafts(prev => ({ ...prev, [q._id]: e.target.value }))}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') commitPositionChange(tIndex, qIndex, q._id, e.target.value, topNode.questions.length);
+                                      }}
+                                      onBlur={e => commitPositionChange(tIndex, qIndex, q._id, e.target.value, topNode.questions.length)}
+                                      onFocus={e => e.target.select()}
+                                      className="w-12 text-center bg-gray-800 border border-gray-700 rounded-md py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      title="Type a position and press Enter to move this question there"
+                                    />
+                                    <span className="text-[8px] text-gray-500 font-bold">/ {topNode.questions.length}</span>
                                   </div>
 
                                   {/* Include checkbox */}
