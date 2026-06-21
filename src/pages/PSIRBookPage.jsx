@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Download, Loader2, Eye, UserCheck, CheckSquare, Square, ChevronDown, ChevronRight, ArrowUp, ArrowDown, Pencil, Check, X } from 'lucide-react';
+import { BookOpen, Download, Loader2, Eye, UserCheck, CheckSquare, Square, ChevronDown, ChevronRight, ArrowUp, ArrowDown, Pencil, Check, X, Trash2 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -21,6 +21,7 @@ export default function PSIRBookPage() {
   const [editingTopper, setEditingTopper] = useState(null); // { tIndex, qIndex, fIndex }
   const [editingTopperValues, setEditingTopperValues] = useState({});
   const [positionDrafts, setPositionDrafts] = useState({}); // { [questionId]: rawInputString }
+  const [isCleaningStorage, setIsCleaningStorage] = useState(false);
 
   useEffect(() => { fetchPsirPreview(); }, []);
 
@@ -264,6 +265,28 @@ export default function PSIRBookPage() {
     return cleanUrl.startsWith('http') ? cleanUrl : `${API_BASE_URL}${cleanUrl}`;
   };
 
+  const cleanupStorage = async () => {
+    const confirmed = window.confirm(
+      'This will permanently delete every compiled PSIR book file stored on the server (including any not yet downloaded) to free up database space. Job history and selections are kept. Continue?'
+    );
+    if (!confirmed) return;
+
+    setIsCleaningStorage(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/psir/cleanup-storage`, { method: 'POST' });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to clean up storage.');
+      }
+      const data = await response.json();
+      alert(`Storage cleaned: removed ${data.deletedFiles} file(s) and ${data.deletedChunks} chunk(s). Cleared references on ${data.jobsUpdated} job record(s).`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsCleaningStorage(false);
+    }
+  };
+
   let totalActiveQuestions = 0;
   let selectedActiveQuestions = 0;
   if (activePaperNode) {
@@ -279,7 +302,16 @@ export default function PSIRBookPage() {
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-12 font-sans relative flex flex-col items-center">
 
       {/* Header */}
-      <div className="max-w-6xl w-full text-center mb-10">
+      <div className="max-w-6xl w-full text-center mb-10 relative">
+        <button
+          onClick={cleanupStorage}
+          disabled={isCleaningStorage}
+          title="Delete all compiled PSIR book files from server storage to free up space"
+          className="absolute top-0 right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {isCleaningStorage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          Clean File Storage
+        </button>
         <div className="inline-flex w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl items-center justify-center shadow-lg shadow-indigo-500/10 mb-4">
           <BookOpen className="w-8 h-8 text-white" />
         </div>
