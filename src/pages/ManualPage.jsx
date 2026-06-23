@@ -1,204 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, FileEdit, Check, Loader2, AlertTriangle, X, Plus } from 'lucide-react';
-import { fetchHierarchy, uploadManualQuestion, addCustomTag } from '../services/api';
+import { UploadCloud, FileEdit, Check, Loader2, AlertTriangle, X } from 'lucide-react';
+import { uploadManualQuestion, fetchUsedSubjects } from '../services/api';
+import SubjectCombobox from '../components/SubjectCombobox';
 
 export default function ManualPage() {
-  const [hierarchyData, setHierarchyData] = useState(null);
-  const [isLoadingHierarchy, setIsLoadingHierarchy] = useState(true);
-  
   const [questionText, setQuestionText] = useState('');
-  const [selectedModule, setSelectedModule] = useState('');
-  const [selectedSection, setSelectedSection] = useState('');
-  const [selectedTopic, setSelectedTopic] = useState('');
-  const [selectedOptional, setSelectedOptional] = useState('');
-  const [selectedOptionalPaper, setSelectedOptionalPaper] = useState('');
-  const [selectedOptionalSection, setSelectedOptionalSection] = useState('');
-  const [selectedOptionalTopic, setSelectedOptionalTopic] = useState('');
-  
+  const [subject, setSubject] = useState('');
+  const [usedSubjects, setUsedSubjects] = useState([]);
+
   const [topperName, setTopperName] = useState('');
   const [topperYear, setTopperYear] = useState('');
   const [topperRank, setTopperRank] = useState('');
   const [topperMarks, setTopperMarks] = useState('');
   const [file, setFile] = useState(null);
-  
+
   const [isUploading, setIsUploading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Add custom tag modal states
-  const [showAddTagModal, setShowAddTagModal] = useState(false);
-  const [addTagType, setAddTagType] = useState(null);
-  const [newTagName, setNewTagName] = useState('');
-  const [addTagPrevValue, setAddTagPrevValue] = useState('');
-  const [isCreatingTag, setIsCreatingTag] = useState(false);
-
-  const handleSelectChange = (type, value, prevValue) => {
-    if (value === '__add_new__') {
-      setAddTagType(type);
-      setAddTagPrevValue(prevValue);
-      setNewTagName('');
-      setShowAddTagModal(true);
-    } else {
-      if (type === 'gsModule') {
-        setSelectedModule(value);
-        setSelectedSection('');
-        setSelectedTopic('');
-      } else if (type === 'gsSection') {
-        setSelectedSection(value);
-        setSelectedTopic('');
-      } else if (type === 'gsTopic') {
-        setSelectedTopic(value);
-      } else if (type === 'optionalSubject') {
-        setSelectedOptional(value);
-        setSelectedOptionalPaper('');
-        setSelectedOptionalSection('');
-        setSelectedOptionalTopic('');
-      } else if (type === 'optionalSection') {
-        setSelectedOptionalSection(value);
-        setSelectedOptionalTopic('');
-      } else if (type === 'optionalTopic') {
-        setSelectedOptionalTopic(value);
-      }
-    }
-  };
-
-  const handleAddTagSubmit = async (e) => {
-    e.preventDefault();
-    if (!newTagName.trim()) return;
-    setIsCreatingTag(true);
-    
-    const payload = {
-      type: addTagType,
-      name: newTagName.trim()
-    };
-    
-    if (addTagType === 'gsSection' || addTagType === 'gsTopic') {
-      payload.parentModule = selectedModule;
-    }
-    if (addTagType === 'gsTopic') {
-      payload.parentSection = selectedSection;
-    }
-    if (addTagType === 'optionalSection' || addTagType === 'optionalTopic') {
-      payload.parentModule = selectedOptional;
-    }
-    if (addTagType === 'optionalTopic') {
-      payload.parentSection = selectedOptionalSection;
-    }
-    
-    try {
-      const response = await addCustomTag(payload);
-      const createdName = response.name || payload.name;
-      
-      setHierarchyData(prev => {
-        const next = { ...prev };
-        const name = createdName;
-        
-        if (addTagType === 'gsModule') {
-          if (!next.gsModules) next.gsModules = {};
-          next.gsModules[name] = next.gsModules[name] || [];
-        } else if (addTagType === 'gsSection') {
-          const mod = selectedModule;
-          if (mod && next.gsModules[mod]) {
-            const exists = next.gsModules[mod].some(s => s.section === name);
-            if (!exists) {
-              next.gsModules[mod].push({ section: name, topics: [] });
-            }
-          }
-        } else if (addTagType === 'gsTopic') {
-          const mod = selectedModule;
-          const sec = selectedSection;
-          if (mod && sec && next.gsModules[mod]) {
-            const secObj = next.gsModules[mod].find(s => s.section === sec);
-            if (secObj) {
-              if (!secObj.topics) secObj.topics = [];
-              const exists = secObj.topics.some(t => t.title === name);
-              if (!exists) {
-                secObj.topics.push({ title: name });
-              }
-            }
-          }
-        } else if (addTagType === 'optionalSubject') {
-          if (!next.optionalSubjects) next.optionalSubjects = {};
-          next.optionalSubjects[name] = next.optionalSubjects[name] || [];
-        } else if (addTagType === 'optionalSection') {
-          const sub = selectedOptional;
-          if (sub && next.optionalSubjects[sub]) {
-            const exists = next.optionalSubjects[sub].some(s => s.section === name);
-            if (!exists) {
-              next.optionalSubjects[sub].push({ section: name, topics: [] });
-            }
-          }
-        } else if (addTagType === 'optionalTopic') {
-          const sub = selectedOptional;
-          const sec = selectedOptionalSection;
-          if (sub && sec && next.optionalSubjects[sub]) {
-            const secObj = next.optionalSubjects[sub].find(s => s.section === sec);
-            if (secObj) {
-              if (!secObj.topics) secObj.topics = [];
-              const exists = secObj.topics.some(t => t.title === name);
-              if (!exists) {
-                secObj.topics.push({ title: name });
-              }
-            }
-          }
-        }
-        
-        return next;
-      });
-      
-      if (addTagType === 'gsModule') {
-        setSelectedModule(createdName);
-        setSelectedSection('');
-        setSelectedTopic('');
-      } else if (addTagType === 'gsSection') {
-        setSelectedSection(createdName);
-        setSelectedTopic('');
-      } else if (addTagType === 'gsTopic') {
-        setSelectedTopic(createdName);
-      } else if (addTagType === 'optionalSubject') {
-        setSelectedOptional(createdName);
-        setSelectedOptionalPaper('');
-        setSelectedOptionalSection('');
-        setSelectedOptionalTopic('');
-      } else if (addTagType === 'optionalSection') {
-        setSelectedOptionalSection(createdName);
-        setSelectedOptionalTopic('');
-      } else if (addTagType === 'optionalTopic') {
-        setSelectedOptionalTopic(createdName);
-      }
-      
-      setShowAddTagModal(false);
-      setNewTagName('');
-    } catch (err) {
-      alert(err.error || 'Failed to add custom tag.');
-    } finally {
-      setIsCreatingTag(false);
-    }
-  };
-
-  const handleAddTagCancel = () => {
-    if (addTagType === 'gsModule') setSelectedModule(addTagPrevValue);
-    else if (addTagType === 'gsSection') setSelectedSection(addTagPrevValue);
-    else if (addTagType === 'gsTopic') setSelectedTopic(addTagPrevValue);
-    else if (addTagType === 'optionalSubject') setSelectedOptional(addTagPrevValue);
-    else if (addTagType === 'optionalSection') setSelectedOptionalSection(addTagPrevValue);
-    else if (addTagType === 'optionalTopic') setSelectedOptionalTopic(addTagPrevValue);
-    
-    setShowAddTagModal(false);
-    setNewTagName('');
-  };
-
   useEffect(() => {
-    fetchHierarchy()
-      .then(data => {
-        setHierarchyData(data);
-        setIsLoadingHierarchy(false);
+    console.log('[ManualPage] Fetching list of used subjects...');
+    fetchUsedSubjects()
+      .then((subjects) => {
+        console.log(`[ManualPage] Loaded ${subjects.length} used subject(s):`, subjects);
+        setUsedSubjects(subjects);
       })
-      .catch(err => {
-        console.error(err);
-        setErrorMsg('Failed to load tag hierarchy.');
-        setIsLoadingHierarchy(false);
-      });
+      .catch((err) => console.error('[ManualPage] Failed to load used subjects:', err));
   }, []);
 
   const handleFileChange = (e) => {
@@ -209,13 +36,7 @@ export default function ManualPage() {
 
   const handleClear = () => {
     setQuestionText('');
-    setSelectedModule('');
-    setSelectedSection('');
-    setSelectedTopic('');
-    setSelectedOptional('');
-    setSelectedOptionalPaper('');
-    setSelectedOptionalSection('');
-    setSelectedOptionalTopic('');
+    setSubject('');
     setTopperName('');
     setTopperYear('');
     setTopperRank('');
@@ -231,15 +52,14 @@ export default function ManualPage() {
       setErrorMsg('Question text and a PDF file are required.');
       return;
     }
-    
+    if (!subject.trim()) {
+      setErrorMsg('Please specify which subject this question belongs to.');
+      return;
+    }
+
     setErrorMsg('');
     setSuccessMsg('');
     setIsUploading(true);
-
-    const tags = [
-        selectedModule, selectedSection, selectedTopic, 
-        selectedOptional, selectedOptionalPaper, selectedOptionalSection, selectedOptionalTopic
-    ].filter(Boolean);
 
     const formData = new FormData();
     formData.append('pdf', file);
@@ -248,53 +68,28 @@ export default function ManualPage() {
     formData.append('topper_year', topperYear);
     formData.append('topper_rank', topperRank);
     formData.append('topper_marks', topperMarks);
-    formData.append('tags', JSON.stringify(tags));
+    formData.append('subject', subject.trim());
 
+    console.log(`[ManualPage] Submitting manual question for subject '${subject.trim()}', file '${file.name}' (${file.size} bytes)...`);
     try {
-      await uploadManualQuestion(formData);
+      const data = await uploadManualQuestion(formData);
+      console.log('[ManualPage] Manual upload succeeded:', data);
       setSuccessMsg('Successfully added manual question and uploaded the document!');
       setTimeout(() => {
         handleClear();
       }, 3000);
     } catch (err) {
-      setErrorMsg(err.error || 'Failed to upload manual question.');
+      console.error('[ManualPage] Manual upload failed:', err);
+      setErrorMsg([err.error, err.details].filter(Boolean).join(' — ') || 'Failed to upload manual question.');
     } finally {
       setIsUploading(false);
     }
   };
 
-  let availableSections = [];
-  let availableTopics = [];
-  if (selectedModule && hierarchyData && hierarchyData.gsModules[selectedModule]) {
-      availableSections = hierarchyData.gsModules[selectedModule];
-      const secObj = availableSections.find(s => s.section === selectedSection);
-      if (secObj && secObj.topics) {
-          availableTopics = secObj.topics;
-      }
-  }
-
-  let availableOptionalSections = [];
-  let availableOptionalTopics = [];
-  if (selectedOptional && hierarchyData && hierarchyData.optionalSubjects[selectedOptional]) {
-      availableOptionalSections = hierarchyData.optionalSubjects[selectedOptional];
-      const secObj = availableOptionalSections.find(s => s.section === selectedOptionalSection);
-      if (secObj && secObj.topics) {
-          availableOptionalTopics = secObj.topics;
-      }
-  }
-
-  if (isLoadingHierarchy) {
-      return (
-        <div className="min-h-screen flex items-center justify-center text-white">
-            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        </div>
-      );
-  }
-
   return (
     <div className="min-h-screen text-gray-100 p-6 md:p-12 font-sans overflow-x-hidden flex justify-center items-start">
       <div className="w-full max-w-4xl bg-gray-800/50 border border-gray-700 p-8 md:p-12 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 backdrop-blur-sm">
-        
+
         <div className="flex flex-col text-left border-b border-gray-700/50 pb-6 mb-8">
             <div className="flex items-center gap-4 mb-2">
                 <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
@@ -322,11 +117,11 @@ export default function ManualPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-            
+
             {/* Question Text */}
             <div className="space-y-2">
                 <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Question Text *</label>
-                <textarea 
+                <textarea
                     value={questionText}
                     onChange={(e) => setQuestionText(e.target.value)}
                     rows={3}
@@ -336,124 +131,16 @@ export default function ManualPage() {
                 />
             </div>
 
-            {/* Hierarchical Tags */}
-            <div className="bg-gray-900/40 p-6 rounded-2xl border border-gray-700 space-y-4">
-                <h3 className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-2">Classification Tags</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">GS Module</label>
-                        <select
-                            value={selectedModule}
-                            onChange={(e) => handleSelectChange('gsModule', e.target.value, selectedModule)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Module --</option>
-                            {hierarchyData && Object.keys(hierarchyData.gsModules).sort().map(mod => (
-                                <option key={mod} value={mod}>{mod}</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Subject</label>
-                        <select
-                            value={selectedOptional}
-                            onChange={(e) => handleSelectChange('optionalSubject', e.target.value, selectedOptional)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Optional --</option>
-                            {hierarchyData && Object.keys(hierarchyData.optionalSubjects).sort().map(sub => (
-                                <option key={sub} value={sub}>{sub.replace('OptionalSubject', '')}</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-
-                    {selectedModule && (
-                    <div className="md:col-span-2">
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Section</label>
-                        <select
-                            value={selectedSection}
-                            onChange={(e) => handleSelectChange('gsSection', e.target.value, selectedSection)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Section --</option>
-                            {availableSections.map((sec, i) => (
-                                <option key={i} value={sec.section}>{sec.section}</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-                    )}
-
-                    {selectedSection && (
-                    <div className="md:col-span-2">
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Topic</label>
-                        <select
-                            value={selectedTopic}
-                            onChange={(e) => handleSelectChange('gsTopic', e.target.value, selectedTopic)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Topic --</option>
-                            {availableTopics.map((top, i) => (
-                                <option key={i} value={top.title}>{top.title}</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-                    )}
-
-                    {selectedOptional && (
-                    <div className="md:col-span-2">
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Paper</label>
-                        <select
-                            value={selectedOptionalPaper}
-                            onChange={(e) => setSelectedOptionalPaper(e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Paper --</option>
-                            <option value="Paper 1">Paper 1</option>
-                            <option value="Paper 2">Paper 2</option>
-                        </select>
-                    </div>
-                    )}
-
-                    {selectedOptional && (
-                    <div className="md:col-span-2">
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Section</label>
-                        <select
-                            value={selectedOptionalSection}
-                            onChange={(e) => handleSelectChange('optionalSection', e.target.value, selectedOptionalSection)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Optional Section --</option>
-                            {availableOptionalSections.map((sec, i) => (
-                                <option key={i} value={sec.section}>{sec.section.substring(0, 60)}...</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-                    )}
-
-                    {(selectedOptional && selectedOptionalSection) && (
-                    <div className="md:col-span-2">
-                        <label className="text-xs text-gray-500 uppercase mb-1 block">Optional Topic</label>
-                        <select
-                            value={selectedOptionalTopic}
-                            onChange={(e) => handleSelectChange('optionalTopic', e.target.value, selectedOptionalTopic)}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
-                        >
-                            <option value="">-- Select Optional Topic --</option>
-                            {availableOptionalTopics.map((top, i) => (
-                                <option key={i} value={top.title}>{top.title.substring(0, 60)}...</option>
-                            ))}
-                            <option value="__add_new__" className="text-indigo-400 font-bold">+ Add New...</option>
-                        </select>
-                    </div>
-                    )}
-                </div>
+            {/* Subject */}
+            <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Subject *</label>
+                <SubjectCombobox
+                    value={subject}
+                    onChange={setSubject}
+                    subjects={usedSubjects}
+                    placeholder="Type a new subject name"
+                    accentClassName="focus:border-orange-500"
+                />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -461,7 +148,7 @@ export default function ManualPage() {
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Topper Name</label>
-                        <input 
+                        <input
                             type="text"
                             value={topperName}
                             onChange={(e) => setTopperName(e.target.value)}
@@ -469,11 +156,11 @@ export default function ManualPage() {
                             className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner"
                         />
                     </div>
-                    
+
                     <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Year</label>
-                            <input 
+                            <input
                                 type="text"
                                 value={topperYear}
                                 onChange={(e) => setTopperYear(e.target.value)}
@@ -483,7 +170,7 @@ export default function ManualPage() {
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Rank</label>
-                            <input 
+                            <input
                                 type="text"
                                 value={topperRank}
                                 onChange={(e) => setTopperRank(e.target.value)}
@@ -493,7 +180,7 @@ export default function ManualPage() {
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Marks</label>
-                            <input 
+                            <input
                                 type="text"
                                 value={topperMarks}
                                 onChange={(e) => setTopperMarks(e.target.value)}
@@ -508,7 +195,7 @@ export default function ManualPage() {
                 <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">Answer Sheet PDF *</label>
                     <div className="w-full bg-gray-900/50 border border-gray-600 rounded-xl py-2 px-3 flex items-center justify-between transition-colors shadow-inner focus-within:border-orange-500 overflow-hidden">
-                        <input 
+                        <input
                             type="file"
                             accept="application/pdf"
                             onChange={handleFileChange}
@@ -525,7 +212,7 @@ export default function ManualPage() {
             </div>
 
             <div className="pt-6 border-t border-gray-700/50 flex justify-end gap-4">
-                <button 
+                <button
                     type="button"
                     onClick={handleClear}
                     disabled={isUploading}
@@ -533,7 +220,7 @@ export default function ManualPage() {
                 >
                     Clear Form
                 </button>
-                <button 
+                <button
                     type="submit"
                     disabled={isUploading || !questionText || !file}
                     className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -545,74 +232,6 @@ export default function ManualPage() {
 
         </form>
       </div>
-
-      {/* Modal for adding custom tags */}
-      {showAddTagModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-left">
-            <form onSubmit={handleAddTagSubmit}>
-              <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-white">
-                  Add New {addTagType?.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleAddTagCancel}
-                  className="text-gray-500 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <div className="p-6 space-y-4">
-                {(addTagType === 'gsSection' || addTagType === 'gsTopic' || addTagType === 'optionalSection' || addTagType === 'optionalTopic') && (
-                  <div className="text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 px-3 py-2 rounded-lg">
-                    Adding to: <span className="font-semibold">{addTagType.startsWith('gs') ? selectedModule : selectedOptional}</span>
-                    {(addTagType === 'gsTopic' || addTagType === 'optionalTopic') && (
-                      <>
-                        {' > '}
-                        <span className="font-semibold">{addTagType.startsWith('gs') ? selectedSection : selectedOptionalSection}</span>
-                      </>
-                    )}
-                  </div>
-                )}
-                
-                <div>
-                  <label className="text-xs text-gray-500 uppercase mb-1 block">Name / Title</label>
-                  <input
-                    type="text"
-                    value={newTagName}
-                    onChange={(e) => setNewTagName(e.target.value)}
-                    placeholder={`Enter ${addTagType?.replace(/([A-Z])/g, ' $1').toLowerCase()} name...`}
-                    className="w-full bg-gray-850 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-orange-500 transition-colors"
-                    required
-                    autoFocus
-                  />
-                </div>
-              </div>
-              
-              <div className="p-6 border-t border-gray-800 bg-gray-900/50 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleAddTagCancel}
-                  disabled={isCreatingTag}
-                  className="px-4 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingTag || !newTagName.trim()}
-                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold rounded-lg text-sm flex items-center gap-1.5 transition-colors"
-                >
-                  {isCreatingTag ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  Add Tag
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

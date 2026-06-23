@@ -4,13 +4,17 @@ import axios from 'axios';
 // It should ONLY be the domain/port.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-export const uploadPdf = async (file, metadataList) => {
+export const uploadPdf = async (file, metadataList, subject) => {
   const formData = new FormData();
   formData.append('pdf', file);
   if (metadataList && Array.isArray(metadataList)) {
     formData.append('metadataList', JSON.stringify(metadataList));
   }
+  if (subject) {
+    formData.append('subject', subject);
+  }
 
+  console.log(`[api] POST /api/upload — file='${file?.name}', size=${file?.size}, subject='${subject}'`);
   try {
     // 2. Explicitly add '/api/upload' here
     const response = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
@@ -18,23 +22,26 @@ export const uploadPdf = async (file, metadataList) => {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('[api] POST /api/upload — success:', response.data);
     return response.data;
   } catch (error) {
-    console.error("Error uploading PDF:", error);
+    console.error('[api] POST /api/upload — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
     throw error.response?.data || { error: 'An unexpected error occurred during upload.' };
   }
 };
 
 export const uploadManualQuestion = async (formData) => {
+  console.log('[api] POST /api/upload/manual');
   try {
     const response = await axios.post(`${API_BASE_URL}/api/upload/manual`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('[api] POST /api/upload/manual — success:', response.data);
     return response.data;
   } catch (error) {
-    console.error("Error manual uploading PDF:", error);
+    console.error('[api] POST /api/upload/manual — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
     throw error.response?.data || { error: 'An unexpected error occurred during manual upload.' };
   }
 };
@@ -57,6 +64,56 @@ export const fetchTags = async () => {
   } catch (error) {
     console.error("Error fetching tags:", error);
     throw error.response?.data || { error: 'Failed to retrieve tags from server.' };
+  }
+};
+
+export const fetchUsedSubjects = async () => {
+  console.log('[api] GET /api/subjects/used');
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/subjects/used`);
+    console.log('[api] GET /api/subjects/used — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] GET /api/subjects/used — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to retrieve subjects from server.' };
+  }
+};
+
+export const fetchSubjectRegistry = async (status) => {
+  console.log(`[api] GET /api/subjects/registry — status filter: '${status || '(any)'}'`);
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/subjects/registry`, {
+      params: status ? { status } : {}
+    });
+    console.log('[api] GET /api/subjects/registry — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] GET /api/subjects/registry — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to retrieve subject registry from server.' };
+  }
+};
+
+export const classifySubject = async (name, syllabusText) => {
+  console.log(`[api] POST /api/subjects/classify — name='${name}', syllabusText length=${syllabusText?.length || 0}`);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/subjects/classify`, { name, syllabusText });
+    console.log('[api] POST /api/subjects/classify — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] POST /api/subjects/classify — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to classify subject questions.' };
+  }
+};
+
+export const activateSubject = async (slug) => {
+  console.log(`[api] POST /api/subjects/${slug}/activate`);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/subjects/${slug}/activate`);
+    console.log('[api] POST /api/subjects/:slug/activate — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] POST /api/subjects/:slug/activate — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to activate subject.' };
   }
 };
 

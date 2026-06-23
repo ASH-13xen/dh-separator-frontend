@@ -1,42 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PdfUploader from '../components/PdfUploader';
 import ResultsViewer from '../components/ResultsViewer';
-import { uploadPdf, updateToppers } from '../services/api';
+import SubjectCombobox from '../components/SubjectCombobox';
+import { uploadPdf, updateToppers, fetchUsedSubjects } from '../services/api';
 import { AlertTriangle, CheckCircle2, Download, Save, X, RefreshCw, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export default function UploadPage({ 
+export default function UploadPage({
   persistedFile, setPersistedFile,
   persistedResults, setPersistedResults,
   persistedError, setPersistedError
 }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [usedSubjects, setUsedSubjects] = useState([]);
 
   // Post-Processing Modal State
   const [showTopperModal, setShowTopperModal] = useState(false);
   const [detectedToppers, setDetectedToppers] = useState([]);
   const [isUpdatingToppers, setIsUpdatingToppers] = useState(false);
 
+  useEffect(() => {
+    console.log('[UploadPage] Fetching list of used subjects...');
+    fetchUsedSubjects()
+      .then((subjects) => {
+        console.log(`[UploadPage] Loaded ${subjects.length} used subject(s):`, subjects);
+        setUsedSubjects(subjects);
+      })
+      .catch((err) => console.error('[UploadPage] Failed to load used subjects:', err));
+  }, []);
+
   const handleFileSubmit = async () => {
     if (!persistedFile) {
       setPersistedError("Please select a file first.");
       return;
     }
+    if (!subject.trim()) {
+      setPersistedError("Please specify which subject this PDF belongs to.");
+      return;
+    }
 
+    console.log(`[UploadPage] Submitting file '${persistedFile.name}' (${persistedFile.size} bytes) for subject '${subject.trim()}'...`);
     setIsLoading(true);
     setPersistedError('');
     setPersistedResults([]);
 
     try {
-      const response = await uploadPdf(persistedFile);
+      const response = await uploadPdf(persistedFile, undefined, subject.trim());
       const generatedData = response.data;
+      console.log(`[UploadPage] Upload succeeded. Received ${generatedData.length} question record(s).`, generatedData);
       setPersistedResults(generatedData);
 
       // Detect number of unique toppers based on answer_sheet_index
       const maxIndex = Math.max(0, ...generatedData.map(q => q.answer_sheet_index || 1));
-      
+
       if (maxIndex > 0) {
+        console.log(`[UploadPage] Detected ${maxIndex} distinct topper answer sheet(s). Opening topper details modal.`);
         // Prepare initial empty states for each detected topper sheet
         const initialToppers = Array.from({ length: maxIndex }).map((_, i) => ({
           sheetIndex: i + 1,
@@ -50,10 +70,12 @@ export default function UploadPage({
       }
 
     } catch (err) {
-      setPersistedError(err.error || err.message || "Failed to process document.");
-      console.error(err);
+      console.error('[UploadPage] Upload failed:', err);
+      const message = [err.error, err.details].filter(Boolean).join(' — ') || err.message || "Failed to process document.";
+      setPersistedError(message);
     } finally {
       setIsLoading(false);
+      console.log('[UploadPage] handleFileSubmit finished.');
     }
   };
 
@@ -134,17 +156,12 @@ export default function UploadPage({
   doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
 
   const tableData = persistedResults.map((item, index) => {
-    let subject = 'Uncategorized';
-    let topic = '';
-    
-    if (item.tags && item.tags.length > 0) {
-      subject = item.tags[0];
-      topic = item.tags.slice(1).join(' > ');
-    }
+    const itemSubject = item.subject || 'Uncategorized';
+    const topic = item.tags && item.tags.length > 0 ? item.tags.join(' > ') : '';
 
     return [
       index + 1,
-      subject,
+      itemSubject,
       item.question_text || '-',
       topic,
       `Pgs ${item.start_page || '?'}-${item.end_page || '?'}`
@@ -183,13 +200,25 @@ export default function UploadPage({
       </header>
 
       <main className="max-w-5xl mx-auto space-y-8">
-        
-        <PdfUploader 
+
+        <div className="max-w-2xl mx-auto">
+          <label className="block text-sm font-semibold text-gray-300 mb-2">
+            Subject
+          </label>
+          <SubjectCombobox
+            value={subject}
+            onChange={setSubject}
+            subjects={usedSubjects}
+            placeholder="Type a new subject name"
+          />
+        </div>
+
+        <PdfUploader
           onFileSelect={(selected) => {
             setPersistedFile(selected);
-            setPersistedError(''); 
-          }} 
-          isProcessing={isLoading} 
+            setPersistedError('');
+          }}
+          isProcessing={isLoading}
         />
 
         {persistedError && (
