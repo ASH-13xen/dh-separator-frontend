@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   BookOpen,
   Download,
@@ -41,6 +41,10 @@ export default function SubjectBookPage({ subject, subjectName }) {
   const [isCleaningStorage, setIsCleaningStorage] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Skips the auto-save effect's very first run, which fires right after fetchPsirPreview
+  // populates state from the server — that's a load, not a user edit, so it shouldn't re-save.
+  const skipNextAutoSave = useRef(true);
+
   useEffect(() => {
     fetchPsirPreview();
   }, []);
@@ -48,6 +52,7 @@ export default function SubjectBookPage({ subject, subjectName }) {
   const fetchPsirPreview = async () => {
     console.log(`[SubjectBookPage] Fetching preview for subject '${subject}'...`);
     setIsLoading(true);
+    skipNextAutoSave.current = true;
     try {
       const response = await fetch(`${API_BASE_URL}/api/subjects/${subject}/preview`);
       if (!response.ok) {
@@ -55,21 +60,20 @@ export default function SubjectBookPage({ subject, subjectName }) {
         throw new Error(errData.error || "Failed to fetch book layout.");
       }
       const data = await response.json();
-      console.log(`[SubjectBookPage] Preview loaded. ${data.length} paper(s): ${data.map((p) => p.paper).join(', ') || '(none)'}.`, data);
-      setPsirData(data);
-      if (data.length > 0) setActivePaper(data[0].paper);
-      const initSelects = {};
+      const hierarchy = data.hierarchy || [];
+      console.log(`[SubjectBookPage] Preview loaded. ${hierarchy.length} paper(s): ${hierarchy.map((p) => p.paper).join(', ') || '(none)'}.`, data);
+      setPsirData(hierarchy);
+      if (hierarchy.length > 0) setActivePaper(hierarchy[0].paper);
+      const excludedSet = new Set(data.excludedQuestionIds || []);
       const initIncluded = new Set();
-      data.forEach((paperNode) => {
+      hierarchy.forEach((paperNode) => {
         paperNode.topics.forEach((topNode) => {
           topNode.questions.forEach((q) => {
-            initIncluded.add(q._id);
-            initSelects[q._id] =
-              q.file_urls?.length > 0 ? [q.file_urls[0].url] : [];
+            if (!excludedSet.has(q._id)) initIncluded.add(q._id);
           });
         });
       });
-      setSelections(initSelects);
+      setSelections(data.selections || {});
       setIncludedQuestions(initIncluded);
     } catch (err) {
       console.error('[SubjectBookPage] Failed to fetch preview:', err);
@@ -78,6 +82,69 @@ export default function SubjectBookPage({ subject, subjectName }) {
       setIsLoading(false);
     }
   };
+
+  // Snapshots the current topic order/renames, question order, inclusion, selections and
+  // topper detail overrides for one paper and persists them, so the book looks the same
+  // next time it's opened from anywhere. Debounced from a useEffect below.
+  const saveLayoutForPaper = async (paper) => {
+    const paperNode = psirData.find((p) => p.paper === paper);
+    if (!paperNode) return;
+
+    const topicOrder = paperNode.topics.map((t) => t._key);
+    const topicRenames = {};
+    const questionOrder = {};
+    const topperOverrides = {};
+    const paperSelections = {};
+    const paperExcluded = [];
+
+    paperNode.topics.forEach((t) => {
+      if (t.title !== t._key) topicRenames[t._key] = t.title;
+      questionOrder[t._key] = t.questions.map((q) => q._id);
+      t.questions.forEach((q) => {
+        if (!includedQuestions.has(q._id)) paperExcluded.push(q._id);
+        paperSelections[q._id] = selections[q._id] || [];
+        (q.file_urls || []).forEach((f) => {
+          topperOverrides[f.url] = {
+            topper_name: f.topper_name,
+            topper_year: f.topper_year,
+            topper_rank: f.topper_rank,
+            topper_marks: f.topper_marks,
+          };
+        });
+      });
+    });
+
+    try {
+      await fetch(`${API_BASE_URL}/api/subjects/${subject}/layout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paper,
+          topicOrder,
+          topicRenames,
+          questionOrder,
+          excludedQuestionIds: paperExcluded,
+          selections: paperSelections,
+          topperOverrides,
+        }),
+      });
+    } catch (err) {
+      console.error("[SubjectBookPage] Failed to save layout:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (skipNextAutoSave.current) {
+      skipNextAutoSave.current = false;
+      return;
+    }
+    if (!activePaper) return;
+    const timer = setTimeout(() => {
+      saveLayoutForPaper(activePaper);
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [psirData, selections, includedQuestions]);
 
   const activePaperNode = psirData.find((p) => p.paper === activePaper);
 
