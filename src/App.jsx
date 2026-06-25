@@ -6,8 +6,9 @@ import ViewPage from './pages/ViewPage';
 import CollectivePage from './pages/CollectivePage';
 import ManualPage from './pages/ManualPage';
 import PSIRBookPage from './pages/PSIRBookPage';
+import PSIRBookV2Page from './pages/PSIRBookV2Page';
 import SubjectBooksHubPage from './pages/SubjectBooksHubPage';
-import { UploadCloud, Library, BookOpen, FileEdit, FileText, ArrowUpDown } from 'lucide-react';
+import { UploadCloud, Library, BookOpen, Sparkles, FileEdit, FileText, ArrowUpDown } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState('collective');
@@ -69,6 +70,12 @@ function App() {
                <BookOpen className="w-4 h-4" /> PSIR Book
              </button>
              <button
+               onClick={() => setActiveTab('psirV2')}
+               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'psirV2' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+             >
+               <Sparkles className="w-4 h-4" /> PSIR Book 2
+             </button>
+             <button
                onClick={() => setActiveTab('subjectBooks')}
                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'subjectBooks' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
              >
@@ -99,6 +106,7 @@ function App() {
         {activeTab === 'view' && <ViewPage />}
         {activeTab === 'collective' && <CollectivePage />}
         {activeTab === 'psir' && <PSIRBookPage />}
+        {activeTab === 'psirV2' && <PSIRBookV2Page />}
         {activeTab === 'subjectBooks' && <SubjectBooksHubPage />}
         {activeTab === 'manual' && <ManualPage />}
       </div>
