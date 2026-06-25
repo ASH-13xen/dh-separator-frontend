@@ -72,6 +72,9 @@ export default function PSIRBookPage() {
       });
       setSelections(data.selections || {});
       setIncludedQuestions(initIncluded);
+      setCollapsedTopics(
+        Object.fromEntries((data.expandedTopicTitles || []).map((title) => [title, false]))
+      );
     } catch (err) {
       console.error(err);
       alert(err.message);
@@ -93,9 +96,11 @@ export default function PSIRBookPage() {
     const topperOverrides = {};
     const paperSelections = {};
     const paperExcluded = [];
+    const expandedTopics = [];
 
     paperNode.topics.forEach((t) => {
       if (t.title !== t._key) topicRenames[t._key] = t.title;
+      if (collapsedTopics[t.title] === false) expandedTopics.push(t._key);
       questionOrder[t._key] = t.questions.map((q) => q._id);
       t.questions.forEach((q) => {
         if (!includedQuestions.has(q._id)) paperExcluded.push(q._id);
@@ -123,6 +128,7 @@ export default function PSIRBookPage() {
           excludedQuestionIds: paperExcluded,
           selections: paperSelections,
           topperOverrides,
+          expandedTopics,
         }),
       });
     } catch (err) {
@@ -141,7 +147,7 @@ export default function PSIRBookPage() {
     }, 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [psirData, selections, includedQuestions]);
+  }, [psirData, selections, includedQuestions, collapsedTopics]);
 
   const activePaperNode = psirData.find((p) => p.paper === activePaper);
 
