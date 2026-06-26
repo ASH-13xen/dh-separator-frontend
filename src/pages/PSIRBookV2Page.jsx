@@ -21,6 +21,7 @@ import {
   Target,
   RefreshCw,
   CloudOff,
+  FileText,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -34,16 +35,19 @@ function isQuestionReviewed(q, selections, includedQuestions) {
   return (selections[q._id]?.length || 0) > 0;
 }
 
+// Title pages (user-inserted dividers) are never counted toward review progress — they're
+// not a question to review.
 function computeTopicStats(topicNode, selections, includedQuestions) {
-  const total = topicNode.questions.length;
-  const reviewed = topicNode.questions.filter((q) =>
+  const realQuestions = topicNode.questions.filter((q) => !q.isTitlePage);
+  const total = realQuestions.length;
+  const reviewed = realQuestions.filter((q) =>
     isQuestionReviewed(q, selections, includedQuestions),
   ).length;
   return { total, reviewed, isComplete: total > 0 && reviewed === total };
 }
 
 function computePaperStats(paperNode, selections, includedQuestions) {
-  const allQuestions = paperNode.topics.flatMap((t) => t.questions);
+  const allQuestions = paperNode.topics.flatMap((t) => t.questions.filter((q) => !q.isTitlePage));
   const total = allQuestions.length;
   const reviewed = allQuestions.filter((q) =>
     isQuestionReviewed(q, selections, includedQuestions),
@@ -127,6 +131,51 @@ function MilestoneToast({ toast, onDismiss }) {
   );
 }
 
+function AddTitlePageModal({ value, onChange, onAdd, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5 text-amber-400" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Add a Title Page</h3>
+            <p className="text-xs text-gray-400">It'll appear in this topic — drag it to the right spot.</p>
+          </div>
+        </div>
+        <input
+          autoFocus
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) onAdd();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="Subtitle text for this page..."
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500/60 mb-5"
+        />
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onAdd}
+            disabled={!value.trim()}
+            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-5 rounded-lg shadow-md transition-all text-xs cursor-pointer"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TopicGroupHeader({
   topicNode,
   tIndex,
@@ -145,6 +194,7 @@ function TopicGroupHeader({
   onEditCancel,
   onMoveUp,
   onMoveDown,
+  onAddTitlePage,
   dragHandlers,
   isDragOver,
   isDragging,
@@ -232,6 +282,18 @@ function TopicGroupHeader({
             >
               <Pencil className="w-3 h-3" />
             </button>
+            {isList && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddTitlePage();
+                }}
+                className="p-0.5 rounded hover:bg-gray-700 text-gray-500 hover:text-amber-300 transition-colors shrink-0 cursor-pointer"
+                title="Add a title/subsection page here"
+              >
+                <FileText className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -289,6 +351,41 @@ function MasterListRow({
       >
         {selectedCount}/3
       </span>
+    </div>
+  );
+}
+
+// Renders a user-inserted title page (divider) — distinct from MasterListRow/
+// ReviewQuestionRow, which stay question-only and untouched by this feature.
+function TitlePageRow({ subtitle, variant, dragHandlers, isDragOver, isDragging, onDelete }) {
+  const isList = variant === "list";
+  return (
+    <div
+      {...(isList ? dragHandlers : {})}
+      className={`flex items-center gap-2 rounded-lg border transition-all ${
+        isList ? "px-2.5 py-2 cursor-grab active:cursor-grabbing" : "px-4 py-3"
+      } ${
+        isDragOver ? "border-indigo-400 ring-1 ring-indigo-400/50" : "border-amber-500/40"
+      } ${isDragging ? "opacity-40" : ""} bg-amber-500/10 hover:bg-amber-500/15`}
+    >
+      {isList && <GripVertical className="w-3.5 h-3.5 text-amber-600/70 shrink-0" />}
+      <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+      <span className={`text-amber-200 font-semibold flex-1 truncate ${isList ? "text-xs" : "text-sm"}`}>
+        {subtitle}
+      </span>
+      <span className="shrink-0 text-[9px] font-black uppercase tracking-wide text-amber-500/70">
+        Title Page
+      </span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="shrink-0 p-1 rounded hover:bg-amber-500/20 text-amber-500/70 hover:text-red-400 cursor-pointer"
+        title="Delete this title page"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -525,6 +622,8 @@ export default function PSIRBookV2Page() {
   const [editingTopperValues, setEditingTopperValues] = useState({});
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [editingQuestionValue, setEditingQuestionValue] = useState("");
+  const [titlePageModalTopicKey, setTitlePageModalTopicKey] = useState(null);
+  const [titlePageModalValue, setTitlePageModalValue] = useState("");
 
   const [draggedQuestion, setDraggedQuestion] = useState(null); // { topicKey, qId }
   const [dragOverQuestion, setDragOverQuestion] = useState(null);
@@ -594,6 +693,7 @@ export default function PSIRBookV2Page() {
     const questionOrder = {};
     const topperOverrides = {};
     const questionTextOverrides = {};
+    const titlePages = {};
     const paperSelections = {};
     const paperExcluded = [];
     const expandedTopics = [];
@@ -601,8 +701,15 @@ export default function PSIRBookV2Page() {
     paperNode.topics.forEach((t) => {
       if (t.title !== t._key) topicRenames[t._key] = t.title;
       if (expandedTopicKeys.has(t._key)) expandedTopics.push(t._key);
+      // questionOrder must include title-page ids too — that's what encodes their
+      // dragged-to position — but title pages have no exclusion/selection/topper/text
+      // state, so they're skipped for everything below.
       questionOrder[t._key] = t.questions.map((q) => q._id);
       t.questions.forEach((q) => {
+        if (q.isTitlePage) {
+          titlePages[q._id] = { subtitle: q.subtitle, topicKey: t._key };
+          return;
+        }
         if (!includedQuestions.has(q._id)) paperExcluded.push(q._id);
         paperSelections[q._id] = selections[q._id] || [];
         questionTextOverrides[q._id] = q.question_text;
@@ -632,6 +739,7 @@ export default function PSIRBookV2Page() {
           topperOverrides,
           expandedTopics,
           questionTextOverrides,
+          titlePages,
         }),
       });
       if (!res.ok) throw new Error(`Save failed with status ${res.status}`);
@@ -796,7 +904,9 @@ export default function PSIRBookV2Page() {
 
   const handleSelectAllToggle = () => {
     if (!activePaperNode) return;
-    const activeIds = activePaperNode.topics.flatMap((t) => t.questions.map((q) => q._id));
+    const activeIds = activePaperNode.topics.flatMap((t) =>
+      t.questions.filter((q) => !q.isTitlePage).map((q) => q._id),
+    );
     const allSelected = activeIds.every((id) => includedQuestions.has(id));
     setIncludedQuestions((prev) => {
       const next = new Set(prev);
@@ -808,7 +918,9 @@ export default function PSIRBookV2Page() {
 
   const isAllActiveSelected = () => {
     if (!activePaperNode) return false;
-    const activeIds = activePaperNode.topics.flatMap((t) => t.questions.map((q) => q._id));
+    const activeIds = activePaperNode.topics.flatMap((t) =>
+      t.questions.filter((q) => !q.isTitlePage).map((q) => q._id),
+    );
     return activeIds.length > 0 && activeIds.every((id) => includedQuestions.has(id));
   };
 
@@ -864,6 +976,39 @@ export default function PSIRBookV2Page() {
       });
     }
     setEditingTopicKey(null);
+  };
+
+  // Appends a new title page (divider) to the end of a topic's question list — the user
+  // then drags it to the desired spot using the same drag-and-drop already wired for
+  // questions. Auto-expands the topic so the new entry is immediately visible to drag.
+  const addTitlePage = (topicKey, subtitle) => {
+    const id = `titlepage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setPsirData((prev) => {
+      const newData = [...prev];
+      const paperIdx = newData.findIndex((p) => p.paper === activePaper);
+      if (paperIdx === -1) return prev;
+      const newTopics = newData[paperIdx].topics.map((t) =>
+        t._key === topicKey
+          ? { ...t, questions: [...t.questions, { _id: id, isTitlePage: true, subtitle }] }
+          : t,
+      );
+      newData[paperIdx] = { ...newData[paperIdx], topics: newTopics };
+      return newData;
+    });
+    setExpandedTopicKeys((prev) => new Set(prev).add(topicKey));
+  };
+
+  const deleteTitlePage = (topicKey, id) => {
+    setPsirData((prev) => {
+      const newData = [...prev];
+      const paperIdx = newData.findIndex((p) => p.paper === activePaper);
+      if (paperIdx === -1) return prev;
+      const newTopics = newData[paperIdx].topics.map((t) =>
+        t._key === topicKey ? { ...t, questions: t.questions.filter((q) => q._id !== id) } : t,
+      );
+      newData[paperIdx] = { ...newData[paperIdx], topics: newTopics };
+      return newData;
+    });
   };
 
   const saveTopperDetailsV2 = (questionId, fileUrl) => {
@@ -972,7 +1117,9 @@ export default function PSIRBookV2Page() {
     setPdfBlobUrl(null);
     try {
       const orderedIncludedIds = activePaperNode.topics.flatMap((t) =>
-        t.questions.filter((q) => includedQuestions.has(q._id)).map((q) => q._id),
+        t.questions
+          .filter((q) => q.isTitlePage || includedQuestions.has(q._id))
+          .map((q) => q._id),
       );
       if (orderedIncludedIds.length === 0)
         throw new Error("Please select at least one question to include in the book.");
@@ -1093,6 +1240,7 @@ export default function PSIRBookV2Page() {
   if (activePaperNode) {
     activePaperNode.topics.forEach((t) => {
       t.questions.forEach((q) => {
+        if (q.isTitlePage) return;
         totalActiveQuestions++;
         if (includedQuestions.has(q._id)) selectedActiveQuestions++;
       });
@@ -1230,30 +1378,46 @@ export default function PSIRBookV2Page() {
                           onEditCancel={() => setEditingTopicKey(null)}
                           onMoveUp={() => moveTopic(tIndex, -1)}
                           onMoveDown={() => moveTopic(tIndex, 1)}
+                          onAddTitlePage={() => {
+                            setTitlePageModalTopicKey(topNode._key);
+                            setTitlePageModalValue("");
+                          }}
                           dragHandlers={topicDragHandlers(topNode._key)}
                           isDragOver={dragOverTopicKey === topNode._key}
                           isDragging={draggedTopicKey === topNode._key}
                         />
                         {isExpanded && (
                           <div className="flex flex-col gap-1 pl-2">
-                            {topNode.questions.map((q) => (
-                              <MasterListRow
-                                key={q._id}
-                                q={q}
-                                isIncluded={includedQuestions.has(q._id)}
-                                selectedCount={(selections[q._id] || []).length}
-                                isPulsing={pulsingQuestionIds.has(q._id)}
-                                onRowClick={() => {
-                                  selectTopic(topNode._key);
-                                  setScrollToQuestionId(q._id);
-                                  triggerPulse(q._id);
-                                }}
-                                onToggleInclude={() => toggleIncludeQuestionV2(tIndex, q._id)}
-                                dragHandlers={questionDragHandlers(tIndex, topNode._key, q._id)}
-                                isDragOver={dragOverQuestion?.qId === q._id}
-                                isDragging={draggedQuestion?.qId === q._id}
-                              />
-                            ))}
+                            {topNode.questions.map((q) =>
+                              q.isTitlePage ? (
+                                <TitlePageRow
+                                  key={q._id}
+                                  subtitle={q.subtitle}
+                                  variant="list"
+                                  dragHandlers={questionDragHandlers(tIndex, topNode._key, q._id)}
+                                  isDragOver={dragOverQuestion?.qId === q._id}
+                                  isDragging={draggedQuestion?.qId === q._id}
+                                  onDelete={() => deleteTitlePage(topNode._key, q._id)}
+                                />
+                              ) : (
+                                <MasterListRow
+                                  key={q._id}
+                                  q={q}
+                                  isIncluded={includedQuestions.has(q._id)}
+                                  selectedCount={(selections[q._id] || []).length}
+                                  isPulsing={pulsingQuestionIds.has(q._id)}
+                                  onRowClick={() => {
+                                    selectTopic(topNode._key);
+                                    setScrollToQuestionId(q._id);
+                                    triggerPulse(q._id);
+                                  }}
+                                  onToggleInclude={() => toggleIncludeQuestionV2(tIndex, q._id)}
+                                  dragHandlers={questionDragHandlers(tIndex, topNode._key, q._id)}
+                                  isDragOver={dragOverQuestion?.qId === q._id}
+                                  isDragging={draggedQuestion?.qId === q._id}
+                                />
+                              ),
+                            )}
                           </div>
                         )}
                       </div>
@@ -1286,44 +1450,53 @@ export default function PSIRBookV2Page() {
                             onEditCancel={() => setEditingTopicKey(null)}
                           />
                           <div className="p-6 space-y-4 bg-gray-900/10">
-                            {selectedTopic.questions.map((q, qIndex) => (
-                              <ReviewQuestionRow
-                                key={q._id}
-                                q={q}
-                                qIndex={qIndex}
-                                isIncluded={includedQuestions.has(q._id)}
-                                isPulsing={pulsingQuestionIds.has(q._id)}
-                                selections={selections}
-                                onToggleInclude={() => toggleIncludeQuestionV2(tIndex, q._id)}
-                                onSelectionChange={handleSelectionChangeV2}
-                                editingTopperKey={editingTopperKey}
-                                editingTopperValues={editingTopperValues}
-                                onTopperEditStart={(fileObj) => {
-                                  setEditingTopperKey(fileObj.url);
-                                  setEditingTopperValues({
-                                    topper_name: fileObj.topper_name || "",
-                                    topper_year: fileObj.topper_year || "",
-                                    topper_rank: fileObj.topper_rank || "",
-                                    topper_marks: fileObj.topper_marks || "",
-                                  });
-                                }}
-                                onTopperEditChange={(field, value) =>
-                                  setEditingTopperValues((p) => ({ ...p, [field]: value }))
-                                }
-                                onTopperEditSave={saveTopperDetailsV2}
-                                onTopperEditCancel={() => setEditingTopperKey(null)}
-                                isEditingQuestion={editingQuestionId === q._id}
-                                editingQuestionValue={editingQuestionValue}
-                                onQuestionEditStart={() => {
-                                  setEditingQuestionId(q._id);
-                                  setEditingQuestionValue(q.question_text);
-                                }}
-                                onQuestionEditChange={setEditingQuestionValue}
-                                onQuestionEditSave={saveQuestionTextV2}
-                                onQuestionEditCancel={() => setEditingQuestionId(null)}
-                                getPreviewUrl={getPreviewUrl}
-                              />
-                            ))}
+                            {selectedTopic.questions.map((q, qIndex) =>
+                              q.isTitlePage ? (
+                                <TitlePageRow
+                                  key={q._id}
+                                  subtitle={q.subtitle}
+                                  variant="review"
+                                  onDelete={() => deleteTitlePage(selectedTopic._key, q._id)}
+                                />
+                              ) : (
+                                <ReviewQuestionRow
+                                  key={q._id}
+                                  q={q}
+                                  qIndex={qIndex}
+                                  isIncluded={includedQuestions.has(q._id)}
+                                  isPulsing={pulsingQuestionIds.has(q._id)}
+                                  selections={selections}
+                                  onToggleInclude={() => toggleIncludeQuestionV2(tIndex, q._id)}
+                                  onSelectionChange={handleSelectionChangeV2}
+                                  editingTopperKey={editingTopperKey}
+                                  editingTopperValues={editingTopperValues}
+                                  onTopperEditStart={(fileObj) => {
+                                    setEditingTopperKey(fileObj.url);
+                                    setEditingTopperValues({
+                                      topper_name: fileObj.topper_name || "",
+                                      topper_year: fileObj.topper_year || "",
+                                      topper_rank: fileObj.topper_rank || "",
+                                      topper_marks: fileObj.topper_marks || "",
+                                    });
+                                  }}
+                                  onTopperEditChange={(field, value) =>
+                                    setEditingTopperValues((p) => ({ ...p, [field]: value }))
+                                  }
+                                  onTopperEditSave={saveTopperDetailsV2}
+                                  onTopperEditCancel={() => setEditingTopperKey(null)}
+                                  isEditingQuestion={editingQuestionId === q._id}
+                                  editingQuestionValue={editingQuestionValue}
+                                  onQuestionEditStart={() => {
+                                    setEditingQuestionId(q._id);
+                                    setEditingQuestionValue(q.question_text);
+                                  }}
+                                  onQuestionEditChange={setEditingQuestionValue}
+                                  onQuestionEditSave={saveQuestionTextV2}
+                                  onQuestionEditCancel={() => setEditingQuestionId(null)}
+                                  getPreviewUrl={getPreviewUrl}
+                                />
+                              ),
+                            )}
                           </div>
                         </div>
                       );
@@ -1351,6 +1524,18 @@ export default function PSIRBookV2Page() {
       )}
 
       <MilestoneToast toast={activeToast} onDismiss={() => setActiveToast(null)} />
+
+      {titlePageModalTopicKey && (
+        <AddTitlePageModal
+          value={titlePageModalValue}
+          onChange={setTitlePageModalValue}
+          onAdd={() => {
+            addTitlePage(titlePageModalTopicKey, titlePageModalValue.trim());
+            setTitlePageModalTopicKey(null);
+          }}
+          onCancel={() => setTitlePageModalTopicKey(null)}
+        />
+      )}
 
       {/* Compiled PDF Preview Modal */}
       {showPreviewModal && pdfBlobUrl && (
