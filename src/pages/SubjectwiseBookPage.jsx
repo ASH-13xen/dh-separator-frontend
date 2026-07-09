@@ -22,6 +22,7 @@ import {
   RefreshCw,
   CloudOff,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -395,6 +396,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [generationStatus, setGenerationStatus] = useState("pending");
   const [isCleaningStorage, setIsCleaningStorage] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const [expandedTopicKeys, setExpandedTopicKeys] = useState(new Set());
   const [selectedTopicKey, setSelectedTopicKey] = useState(null);
@@ -916,6 +918,24 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const getPreviewUrl = (url) =>
     `${API_BASE_URL}/api/subjects/${subject}/preview-file?url=${encodeURIComponent(getCleanUrl(url))}`;
 
+  const reclassifyNewQuestions = async () => {
+    if (!window.confirm(
+      `This will re-classify ALL uploaded questions for "${subjectName}" using the saved syllabus and refresh the book builder. New questions will appear in their correct topics.\n\nContinue?`
+    )) return;
+    setIsReclassifying(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/reclassify`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Re-classification failed.");
+      alert(`Done! ${data.questionCount} questions classified. Reloading book data...`);
+      await fetchPreview();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsReclassifying(false);
+    }
+  };
+
   const cleanupStorage = async () => {
     const confirmed = window.confirm(
       `This will permanently delete all compiled ${subjectName} book files from server storage to free up space. Job history and selections are kept. Continue?`,
@@ -952,15 +972,26 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   return (
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-10 font-sans relative flex flex-col items-center">
       <div className="max-w-[1600px] w-full text-center mb-8 relative">
-        <button
-          onClick={cleanupStorage}
-          disabled={isCleaningStorage}
-          title="Delete all compiled book files from server storage to free up space"
-          className="absolute top-0 right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {isCleaningStorage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-          Clean File Storage
-        </button>
+        <div className="absolute top-0 right-0 flex items-center gap-2">
+          <button
+            onClick={reclassifyNewQuestions}
+            disabled={isReclassifying}
+            title="New questions were uploaded? Re-classify using saved syllabus and refresh book"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-indigo-400 hover:border-indigo-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isReclassifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+            {isReclassifying ? "Classifying…" : "Sync New Questions"}
+          </button>
+          <button
+            onClick={cleanupStorage}
+            disabled={isCleaningStorage}
+            title="Delete all compiled book files from server storage to free up space"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isCleaningStorage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            Clean File Storage
+          </button>
+        </div>
         <div className="inline-flex w-16 h-16 bg-linear-to-br from-indigo-500 to-purple-500 rounded-2xl items-center justify-center shadow-lg shadow-indigo-500/10 mb-4">
           <BookOpen className="w-8 h-8 text-white" />
         </div>
