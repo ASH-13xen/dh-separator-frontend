@@ -22,6 +22,7 @@ import {
   RefreshCw,
   CloudOff,
   FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -1202,6 +1203,80 @@ export default function PSIRBookV2Page() {
     }
   };
 
+  const generateAndDownloadCSV = (paperNode) => {
+    if (!paperNode) return;
+    // Pages per topper answer assumed (UPSC answers avg 5 pages each).
+    // Actual PDF page counts are unknown until generation — these are estimates.
+    const PAGES_PER_TOPPER = 5;
+
+    // Count TOC entries to estimate TOC page count.
+    // TOC has: 1 section entry + 1 per topic + 1 per included+selected question.
+    let selectedQCount = 0;
+    paperNode.topics.forEach((t) => {
+      t.questions.forEach((q) => {
+        if (!q.isTitlePage && includedQuestions.has(q._id) && (selections[q._id]?.length || 0) > 0)
+          selectedQCount++;
+      });
+    });
+    const tocEntries = 1 + paperNode.topics.length + selectedQCount;
+    // Rough estimate: ~25 entries per TOC page (10pt text, ~30pt row height, ~792pt page)
+    const estimatedTocPages = Math.max(1, Math.ceil(tocEntries / 25));
+    const estimatedSummaryPages = 1; // topper performance table
+
+    // Replicate the PDF generation page-counter logic from generatePsirPdf.js.
+    // internalPages mirrors pdfDoc.getPageCount() in the script — starts at 1 (after cover).
+    let internalPages = 1; // cover already "added"
+    internalPages++;       // section divider page
+
+    const escapeCell = (s) => `"${String(s || '').replace(/\n/g, ' ').trim().replace(/"/g, '""')}"`;
+
+    const rows = [
+      [`# PSIR ${paperNode.paper} — Question Index`],
+      [`# Page numbers are estimates (assumes ${PAGES_PER_TOPPER} pages per topper answer sheet)`],
+      [],
+      ['Question Text', 'Topic', 'Approx. Page No.'],
+    ];
+
+    for (const topNode of paperNode.topics) {
+      internalPages++; // topic divider page
+
+      for (const item of topNode.questions) {
+        if (item.isTitlePage) {
+          internalPages++; // subtopic divider page
+          continue;
+        }
+
+        if (!includedQuestions.has(item._id)) continue;
+
+        const selectedUrls = selections[item._id] || [];
+        if (selectedUrls.length === 0) continue;
+
+        // Mirror: truePageNum = 1 + totalIndexPages + totalSummaryPages + targetPageInternal
+        const approxPage = 1 + estimatedTocPages + estimatedSummaryPages + internalPages;
+
+        rows.push([
+          escapeCell(item.question_text),
+          escapeCell(topNode.title),
+          approxPage,
+        ]);
+
+        // Advance internal counter by the topper pages this question occupies
+        internalPages += selectedUrls.length * PAGES_PER_TOPPER;
+      }
+    }
+
+    const csvContent = rows.map((r) => r.join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `PSIR_${(paperNode.paper || '').replace(/\s+/g, '_')}_Questions.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const getCleanUrl = (url) => {
     if (!url) return "#";
     const cleanUrl = url.replace("https//", "https://").replace("http//", "http://");
@@ -1331,6 +1406,15 @@ export default function PSIRBookV2Page() {
                   >
                     {isAllActiveSelected() ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                     {isAllActiveSelected() ? "Deselect All" : "Select All"}
+                  </button>
+                  <button
+                    onClick={() => generateAndDownloadCSV(activePaperNode)}
+                    disabled={selectedActiveQuestions === 0}
+                    title="Export selected questions with estimated page numbers to CSV"
+                    className="bg-teal-700 hover:bg-teal-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-all flex items-center gap-2 text-xs cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Export CSV
                   </button>
                   <button
                     onClick={generateAndPreviewPdf}

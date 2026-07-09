@@ -894,16 +894,28 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
           t.questions.forEach((q) => { if (q._id === editingQuestionId) editedFileUrls = q.file_urls || []; });
         });
 
+        const mergeIntoTarget = (q) => {
+          const existingUrls = new Set((q.file_urls || []).map((f) => f.url));
+          const merged = [...(q.file_urls || []), ...editedFileUrls.filter((f) => !existingUrls.has(f.url))];
+          return { ...q, file_urls: merged };
+        };
+
+        const sameTopicMerge = mergeTargetTopicKey === editedTopicKey;
+
         const newTopics = newData[paperIdx].topics.map((t) => {
+          if (sameTopicMerge && t._key === mergeTargetTopicKey) {
+            // Both in the same topic: filter out the edited question AND merge into target in one pass.
+            return {
+              ...t,
+              questions: t.questions
+                .filter((q) => q._id !== editingQuestionId)
+                .map((q) => q._id === mergeTargetId ? mergeIntoTarget(q) : q),
+            };
+          }
           if (t._key === mergeTargetTopicKey) {
             return {
               ...t,
-              questions: t.questions.map((q) => {
-                if (q._id !== mergeTargetId) return q;
-                const existingUrls = new Set((q.file_urls || []).map((f) => f.url));
-                const merged = [...(q.file_urls || []), ...editedFileUrls.filter((f) => !existingUrls.has(f.url))];
-                return { ...q, file_urls: merged };
-              }),
+              questions: t.questions.map((q) => q._id === mergeTargetId ? mergeIntoTarget(q) : q),
             };
           }
           if (t._key === editedTopicKey) {
