@@ -199,7 +199,7 @@ export default function SubjectwiseSetupPage({ onBack, onActivated }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Classification failed.");
-      setClassifiedSlug(data.slug);
+      setClassifiedSlug(data.subject?.slug || data.slug);
       setClassifiedCount(data.questionCount || 0);
       setClassifyStatus("done");
     } catch (err) {
