@@ -23,6 +23,7 @@ import {
   CloudOff,
   FileText,
   RotateCcw,
+  ArrowRightLeft,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -171,17 +172,23 @@ function TopicGroupHeader({
   isExpanded, onToggleExpand, isSelected, onSelect,
   isEditing, editingValue, onEditChange, onEditStart, onEditCommit, onEditCancel,
   onMoveUp, onMoveDown, onAddTitlePage, dragHandlers, isDragOver, isDragging,
+  questionDropHandlers, isQuestionDragTarget,
 }) {
   const isList = variant === "list";
   return (
     <div
       {...(isList ? dragHandlers : {})}
+      {...(isList && questionDropHandlers ? questionDropHandlers : {})}
       onClick={isList ? onSelect : undefined}
       className={`px-4 py-3 flex items-center justify-between gap-2 rounded-xl transition-all ${
         isList
-          ? `border cursor-pointer ${isDragOver ? "border-indigo-400 ring-2 ring-indigo-400/40" : isSelected ? "border-indigo-500/70 ring-1 ring-indigo-500/40" : "border-gray-800"} ${isDragging ? "opacity-40" : ""} bg-gray-900/70`
+          ? `border cursor-pointer ${
+              isQuestionDragTarget ? "border-amber-400 ring-2 ring-amber-400/40 bg-amber-500/5" :
+              isDragOver ? "border-indigo-400 ring-2 ring-indigo-400/40" :
+              isSelected ? "border-indigo-500/70 ring-1 ring-indigo-500/40" : "border-gray-800"
+            } ${isDragging ? "opacity-40" : ""} bg-gray-900/70`
           : "bg-gray-900/60 border-b border-gray-800"
-      } ${stats.isComplete ? "border-emerald-500/50 bg-emerald-500/5" : ""}`}
+      } ${!isQuestionDragTarget && stats.isComplete ? "border-emerald-500/50 bg-emerald-500/5" : ""}`}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {isList && <GripVertical className="w-4 h-4 text-gray-600 shrink-0 cursor-grab active:cursor-grabbing" />}
@@ -278,7 +285,7 @@ function ReviewQuestionRow({
   q, qIndex, isIncluded, isPulsing, selections, onToggleInclude, onSelectionChange,
   editingTopperKey, editingTopperValues, onTopperEditStart, onTopperEditChange, onTopperEditSave, onTopperEditCancel,
   isEditingQuestion, editingQuestionValue, onQuestionEditStart, onQuestionEditChange, onQuestionEditSave, onQuestionEditCancel,
-  getPreviewUrl,
+  getPreviewUrl, onMoveToOtherPaper,
 }) {
   const currentSelections = selections[q._id] || [];
   return (
@@ -314,6 +321,9 @@ function ReviewQuestionRow({
             <p className="text-white text-sm font-semibold leading-relaxed flex-1">{q.question_text}</p>
             <button onClick={onQuestionEditStart} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-indigo-300 transition-colors shrink-0 cursor-pointer" title="Edit question text">
               <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onMoveToOtherPaper(q._id)} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-teal-300 transition-colors shrink-0 cursor-pointer" title="Move to another paper / section">
+              <ArrowRightLeft className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
@@ -410,10 +420,16 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [titlePageModalTopicKey, setTitlePageModalTopicKey] = useState(null);
   const [titlePageModalValue, setTitlePageModalValue] = useState("");
 
-  const [draggedQuestion, setDraggedQuestion] = useState(null);
+  const [draggedQuestion, setDraggedQuestion] = useState(null); // { topicKey, qId }
   const [dragOverQuestion, setDragOverQuestion] = useState(null);
   const [draggedTopicKey, setDraggedTopicKey] = useState(null);
   const [dragOverTopicKey, setDragOverTopicKey] = useState(null);
+  const [dragOverTopicForQuestion, setDragOverTopicForQuestion] = useState(null);
+
+  // Cross-paper move modal
+  const [moveToPaperModal, setMoveToPaperModal] = useState(null); // { qId, fromTopicKey }
+  const [moveToPaperPaper, setMoveToPaperPaper] = useState('');
+  const [moveToPaperTopicKey, setMoveToPaperTopicKey] = useState('');
 
   const [saveStatus, setSaveStatus] = useState("saved");
   const [celebratedMilestones, setCelebratedMilestones] = useState(new Set());
@@ -647,6 +663,74 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     });
   };
 
+  const moveQuestionAcrossTopics = (fromTopicKey, toTopicKey, qId, insertBeforeQId) => {
+    setPsirData((prev) => {
+      const newData = [...prev];
+      const paperIdx = newData.findIndex((p) => p.paper === activePaper);
+      if (paperIdx === -1) return prev;
+      const topics = [...newData[paperIdx].topics];
+      const fromTIdx = topics.findIndex((t) => t._key === fromTopicKey);
+      const toTIdx = topics.findIndex((t) => t._key === toTopicKey);
+      if (fromTIdx === -1 || toTIdx === -1 || fromTIdx === toTIdx) return prev;
+      const fromQs = [...topics[fromTIdx].questions];
+      const qIdx = fromQs.findIndex((q) => q._id === qId);
+      if (qIdx === -1) return prev;
+      const [movedQ] = fromQs.splice(qIdx, 1);
+      topics[fromTIdx] = { ...topics[fromTIdx], questions: fromQs };
+      const toQs = [...topics[toTIdx].questions];
+      const insertIdx = insertBeforeQId ? toQs.findIndex((q) => q._id === insertBeforeQId) : -1;
+      toQs.splice(insertIdx >= 0 ? insertIdx : toQs.length, 0, movedQ);
+      topics[toTIdx] = { ...topics[toTIdx], questions: toQs };
+      newData[paperIdx] = { ...newData[paperIdx], topics };
+      return newData;
+    });
+  };
+
+  const openMoveToPaperModal = (qId) => {
+    const fromTopic = activePaperNode?.topics.find((t) => t.questions.some((q) => q._id === qId));
+    if (!fromTopic) return;
+    const defaultPaper = psirData.find((p) => p.paper !== activePaper)?.paper || activePaper;
+    const defaultTopicKey = psirData.find((p) => p.paper === defaultPaper)?.topics[0]?._key || '';
+    setMoveToPaperModal({ qId, fromTopicKey: fromTopic._key });
+    setMoveToPaperPaper(defaultPaper);
+    setMoveToPaperTopicKey(defaultTopicKey);
+  };
+
+  const confirmMoveQuestionToPaper = () => {
+    if (!moveToPaperModal || !moveToPaperPaper || !moveToPaperTopicKey) return;
+    const { qId, fromTopicKey } = moveToPaperModal;
+    if (moveToPaperPaper === activePaper) {
+      if (fromTopicKey !== moveToPaperTopicKey) {
+        moveQuestionAcrossTopics(fromTopicKey, moveToPaperTopicKey, qId, null);
+      }
+      setMoveToPaperModal(null);
+      return;
+    }
+    setPsirData((prev) => {
+      const newData = prev.map((p) => ({
+        ...p,
+        topics: p.topics.map((t) => ({ ...t, questions: [...t.questions] })),
+      }));
+      const fromPaperIdx = newData.findIndex((p) => p.paper === activePaper);
+      const toPaperIdx = newData.findIndex((p) => p.paper === moveToPaperPaper);
+      if (fromPaperIdx === -1 || toPaperIdx === -1) return prev;
+      const fromTopics = newData[fromPaperIdx].topics;
+      const fromTIdx = fromTopics.findIndex((t) => t._key === fromTopicKey);
+      if (fromTIdx === -1) return prev;
+      const fromQs = [...fromTopics[fromTIdx].questions];
+      const qIdx = fromQs.findIndex((q) => q._id === qId);
+      if (qIdx === -1) return prev;
+      const [movedQ] = fromQs.splice(qIdx, 1);
+      newData[fromPaperIdx].topics[fromTIdx].questions = fromQs;
+      const toTopics = newData[toPaperIdx].topics;
+      const toTIdx = toTopics.findIndex((t) => t._key === moveToPaperTopicKey);
+      if (toTIdx === -1) return prev;
+      newData[toPaperIdx].topics[toTIdx].questions = [...toTopics[toTIdx].questions, movedQ];
+      return newData;
+    });
+    setMoveToPaperModal(null);
+  };
+
   const toggleIncludeQuestion = (tIndex, qId) => {
     const wasIncluded = includedQuestions.has(qId);
     setIncludedQuestions((prev) => {
@@ -781,36 +865,118 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
 
   const saveQuestionText = () => {
     const newText = editingQuestionValue.trim();
-    if (newText) {
-      setPsirData((prev) => {
-        const newData = [...prev];
-        const paperIdx = newData.findIndex((p) => p.paper === activePaper);
-        if (paperIdx === -1) return prev;
+    if (!newText) { setEditingQuestionId(null); return; }
+
+    setPsirData((prev) => {
+      const newData = [...prev];
+      const paperIdx = newData.findIndex((p) => p.paper === activePaper);
+      if (paperIdx === -1) return prev;
+
+      // Find edited question and any other question in this paper with the same text.
+      let editedTopicKey = null;
+      let mergeTargetId = null;
+      let mergeTargetTopicKey = null;
+
+      newData[paperIdx].topics.forEach((t) => {
+        t.questions.forEach((q) => {
+          if (q._id === editingQuestionId) editedTopicKey = t._key;
+          else if (!q.isTitlePage && q.question_text.trim() === newText && !mergeTargetId) {
+            mergeTargetId = q._id;
+            mergeTargetTopicKey = t._key;
+          }
+        });
+      });
+
+      if (mergeTargetId) {
+        // Merge: combine file_urls into the existing question, remove the edited duplicate.
+        let editedFileUrls = [];
+        newData[paperIdx].topics.forEach((t) => {
+          t.questions.forEach((q) => { if (q._id === editingQuestionId) editedFileUrls = q.file_urls || []; });
+        });
+
+        const newTopics = newData[paperIdx].topics.map((t) => {
+          if (t._key === mergeTargetTopicKey) {
+            return {
+              ...t,
+              questions: t.questions.map((q) => {
+                if (q._id !== mergeTargetId) return q;
+                const existingUrls = new Set((q.file_urls || []).map((f) => f.url));
+                const merged = [...(q.file_urls || []), ...editedFileUrls.filter((f) => !existingUrls.has(f.url))];
+                return { ...q, file_urls: merged };
+              }),
+            };
+          }
+          if (t._key === editedTopicKey) {
+            return { ...t, questions: t.questions.filter((q) => q._id !== editingQuestionId) };
+          }
+          return t;
+        });
+        newData[paperIdx] = { ...newData[paperIdx], topics: newTopics };
+        // Keep selections from the merge target; drop the edited question's selections.
+        setSelections((prev) => { const s = { ...prev }; delete s[editingQuestionId]; return s; });
+      } else {
+        // No duplicate — just update the text.
         const newTopics = newData[paperIdx].topics.map((t) => ({
           ...t,
           questions: t.questions.map((q) => q._id === editingQuestionId ? { ...q, question_text: newText } : q),
         }));
         newData[paperIdx] = { ...newData[paperIdx], topics: newTopics };
-        return newData;
-      });
-    }
+      }
+
+      return newData;
+    });
+
     setEditingQuestionId(null);
   };
 
   const questionDragHandlers = (tIndex, topicKey, qId) => ({
     draggable: true,
     onDragStart: (e) => { setDraggedQuestion({ topicKey, qId }); e.dataTransfer.effectAllowed = "move"; },
-    onDragOver: (e) => { e.preventDefault(); if (draggedQuestion?.topicKey === topicKey) setDragOverQuestion({ topicKey, qId }); },
+    onDragOver: (e) => {
+      e.preventDefault();
+      setDragOverQuestion({ topicKey, qId });
+      setDragOverTopicForQuestion(null); // hovering a question, not the header
+    },
     onDrop: (e) => {
       e.preventDefault();
-      if (!draggedQuestion || draggedQuestion.topicKey !== topicKey) return;
-      const topic = activePaperNode.topics[tIndex];
-      const fromIndex = topic.questions.findIndex((x) => x._id === draggedQuestion.qId);
-      const toIndex = topic.questions.findIndex((x) => x._id === qId);
-      if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) moveQuestionToPosition(tIndex, fromIndex, toIndex);
-      setDraggedQuestion(null); setDragOverQuestion(null);
+      if (!draggedQuestion) return;
+      if (draggedQuestion.topicKey === topicKey) {
+        // Same topic — reorder within topic
+        const topic = activePaperNode.topics[tIndex];
+        const fromIndex = topic.questions.findIndex((x) => x._id === draggedQuestion.qId);
+        const toIndex = topic.questions.findIndex((x) => x._id === qId);
+        if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex)
+          moveQuestionToPosition(tIndex, fromIndex, toIndex);
+      } else {
+        // Different topic — move across, insert before this question
+        moveQuestionAcrossTopics(draggedQuestion.topicKey, topicKey, draggedQuestion.qId, qId);
+        setExpandedTopicKeys((prev) => new Set(prev).add(topicKey));
+      }
+      setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null);
     },
-    onDragEnd: () => { setDraggedQuestion(null); setDragOverQuestion(null); },
+    onDragEnd: () => { setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null); },
+  });
+
+  // Handles dropping a dragged question onto a topic header (appends to that topic).
+  const questionDropOnTopicHandlers = (topicKey) => ({
+    onDragOver: (e) => {
+      if (!draggedQuestion) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverTopicForQuestion(topicKey);
+      setDragOverQuestion(null);
+    },
+    onDrop: (e) => {
+      if (!draggedQuestion) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (draggedQuestion.topicKey !== topicKey) {
+        moveQuestionAcrossTopics(draggedQuestion.topicKey, topicKey, draggedQuestion.qId, null);
+        setExpandedTopicKeys((prev) => new Set(prev).add(topicKey));
+      }
+      setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null);
+    },
+    onDragLeave: () => { if (dragOverTopicForQuestion === topicKey) setDragOverTopicForQuestion(null); },
   });
 
   const topicDragHandlers = (topicKey) => ({
@@ -927,7 +1093,10 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/reclassify`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Re-classification failed.");
-      alert(`Done! ${data.questionCount} questions classified. Reloading book data...`);
+      const msg = data.newCount === 0
+        ? `No new questions found. ${data.questionCount} questions already classified.`
+        : `Done! ${data.newCount} new question(s) classified (${data.questionCount} total). Reloading...`;
+      alert(msg);
       await fetchPreview();
     } catch (err) {
       alert(err.message);
@@ -1089,6 +1258,8 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
                           dragHandlers={topicDragHandlers(topNode._key)}
                           isDragOver={dragOverTopicKey === topNode._key}
                           isDragging={draggedTopicKey === topNode._key}
+                          isQuestionDragTarget={dragOverTopicForQuestion === topNode._key}
+                          questionDropHandlers={questionDropOnTopicHandlers(topNode._key)}
                         />
                         {isExpanded && (
                           <div className="flex flex-col gap-1 pl-2">
@@ -1167,6 +1338,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
                                   onQuestionEditSave={saveQuestionText}
                                   onQuestionEditCancel={() => setEditingQuestionId(null)}
                                   getPreviewUrl={getPreviewUrl}
+                                  onMoveToOtherPaper={openMoveToPaperModal}
                                 />
                               ),
                             )}
@@ -1266,6 +1438,73 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
               <span className={generationStatus === "failed" ? "text-red-500" : generationStatus === "completed" ? "text-green-500" : "text-indigo-400"}>
                 {generationStatus.toUpperCase()}
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move to Paper / Section modal */}
+      {moveToPaperModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/20 flex items-center justify-center">
+                  <ArrowRightLeft className="w-4 h-4 text-teal-400" />
+                </div>
+                <h3 className="text-white font-bold text-base">Move to Another Paper / Section</h3>
+              </div>
+              <button onClick={() => setMoveToPaperModal(null)} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-gray-300 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Paper</label>
+                <select
+                  value={moveToPaperPaper}
+                  onChange={(e) => {
+                    const paper = e.target.value;
+                    const firstTopic = psirData.find((p) => p.paper === paper)?.topics[0]?._key || '';
+                    setMoveToPaperPaper(paper);
+                    setMoveToPaperTopicKey(firstTopic);
+                  }}
+                  className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  {psirData.map((p) => (
+                    <option key={p.paper} value={p.paper}>{p.paper}{p.paper === activePaper ? ' (current)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Section / Topic</label>
+                <select
+                  value={moveToPaperTopicKey}
+                  onChange={(e) => setMoveToPaperTopicKey(e.target.value)}
+                  className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  {(psirData.find((p) => p.paper === moveToPaperPaper)?.topics || []).map((t) => (
+                    <option key={t._key} value={t._key}>{t.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={confirmMoveQuestionToPaper}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-teal-600 hover:bg-teal-500 rounded-xl text-white text-sm font-bold transition-colors cursor-pointer"
+              >
+                <ArrowRightLeft className="w-4 h-4" /> Move Question
+              </button>
+              <button
+                onClick={() => setMoveToPaperModal(null)}
+                className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-300 text-sm font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
