@@ -9,6 +9,8 @@ import {
   BookOpen,
   X,
   ArrowLeft,
+  Wand2,
+  AlertCircle,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -60,6 +62,11 @@ export default function SubjectwiseSetupPage({ onBack, onActivated }) {
   const [classifiedSlug, setClassifiedSlug] = useState(null);
   const [classifiedCount, setClassifiedCount] = useState(0);
   const [isActivating, setIsActivating] = useState(false);
+
+  // Generate syllabus from pasted text
+  const [genText, setGenText] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/subjects/used`)
@@ -184,6 +191,37 @@ export default function SubjectwiseSetupPage({ onBack, onActivated }) {
         p.sections.some((s) => s.name.trim() && s.topics.some((t) => t.trim())),
     );
 
+  const handleGenerateSyllabus = async () => {
+    if (!genText.trim()) return;
+    setIsGenerating(true);
+    setGenError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subjects/generate-syllabus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: genText.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed.");
+      // Convert returned array into the internal papers state (adding React IDs)
+      const converted = (data.papers || []).map((p) => ({
+        id: `paper-${Date.now()}-${Math.random()}`,
+        name: p.name || "",
+        sections: (p.sections || []).map((s) => ({
+          id: `section-${Date.now()}-${Math.random()}`,
+          name: s.name || "",
+          topics: (s.topics || []).filter(Boolean),
+        })),
+      }));
+      setPapers(converted);
+      setGenText("");
+    } catch (err) {
+      setGenError(err.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleClassify = async () => {
     const name = subjectName.trim();
     const syllabusJson = buildSyllabusJson();
@@ -268,6 +306,47 @@ export default function SubjectwiseSetupPage({ onBack, onActivated }) {
           )}
           {!subjectName && (
             <p className="mt-2 text-xs text-gray-500">Must match the subject name used when uploading answer sheets.</p>
+          )}
+        </div>
+
+        {/* Generate syllabus from pasted text */}
+        <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 mb-5">
+          <div className="flex items-center gap-2.5 mb-3">
+            <Wand2 className="w-4 h-4 text-violet-400 shrink-0" />
+            <div>
+              <h2 className="text-sm font-black text-white">Generate Syllabus from Text</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Paste raw syllabus text — Gemini will organise it into Papers → Sections → Topics using only the exact words.</p>
+            </div>
+          </div>
+
+          <textarea
+            value={genText}
+            onChange={(e) => setGenText(e.target.value)}
+            placeholder="Paste your syllabus text here…"
+            rows={8}
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-violet-500/60 resize-y mb-3 font-mono"
+          />
+
+          {genError && (
+            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/40 rounded-xl px-4 py-3 mb-3 text-sm text-red-300">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {genError}
+            </div>
+          )}
+
+          <button
+            onClick={handleGenerateSyllabus}
+            disabled={!genText.trim() || isGenerating}
+            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+          >
+            {isGenerating ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Generating with Gemini…</>
+            ) : (
+              <><Wand2 className="w-4 h-4" /> Generate Syllabus</>
+            )}
+          </button>
+          {!genText.trim() && !isGenerating && (
+            <p className="text-[10px] text-gray-500 text-center mt-2">Paste text above to enable generation.</p>
           )}
         </div>
 
