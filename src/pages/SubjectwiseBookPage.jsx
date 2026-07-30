@@ -172,13 +172,12 @@ function TopicGroupHeader({
   isExpanded, onToggleExpand, isSelected, onSelect,
   isEditing, editingValue, onEditChange, onEditStart, onEditCommit, onEditCancel,
   onMoveUp, onMoveDown, onAddTitlePage, dragHandlers, isDragOver, isDragging,
-  questionDropHandlers, isQuestionDragTarget,
+  isQuestionDragTarget,
 }) {
   const isList = variant === "list";
   return (
     <div
       {...(isList ? dragHandlers : {})}
-      {...(isList && questionDropHandlers ? questionDropHandlers : {})}
       onClick={isList ? onSelect : undefined}
       className={`px-4 py-3 flex items-center justify-between gap-2 rounded-xl transition-all ${
         isList
@@ -969,42 +968,44 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     onDragEnd: () => { setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null); },
   });
 
-  // Handles dropping a dragged question onto a topic header (appends to that topic).
-  const questionDropOnTopicHandlers = (topicKey) => ({
-    onDragOver: (e) => {
-      if (!draggedQuestion) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setDragOverTopicForQuestion(topicKey);
-      setDragOverQuestion(null);
-    },
-    onDrop: (e) => {
-      if (!draggedQuestion) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (draggedQuestion.topicKey !== topicKey) {
-        moveQuestionAcrossTopics(draggedQuestion.topicKey, topicKey, draggedQuestion.qId, null);
-        setExpandedTopicKeys((prev) => new Set(prev).add(topicKey));
-      }
-      setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null);
-    },
-    onDragLeave: () => { if (dragOverTopicForQuestion === topicKey) setDragOverTopicForQuestion(null); },
-  });
-
-  const topicDragHandlers = (topicKey) => ({
+  // Handles the topic header as a drop target for BOTH drag kinds: reordering topics
+  // (header dragged onto header) and dropping a question onto a topic (appends to that
+  // topic). These used to be two separate handler objects both spread onto the same
+  // header div — since they both defined onDragOver/onDrop, the second spread silently
+  // clobbered the first's, so topic-drag's onDragOver never ran and never called
+  // preventDefault(), which made the browser reject the drop every time. Merged into one
+  // handler set so both cases are handled from a single onDragOver/onDrop.
+  const topicHeaderDragHandlers = (topicKey) => ({
     draggable: true,
     onDragStart: (e) => { setDraggedTopicKey(topicKey); e.dataTransfer.effectAllowed = "move"; },
-    onDragOver: (e) => { e.preventDefault(); setDragOverTopicKey(topicKey); },
+    onDragOver: (e) => {
+      e.preventDefault();
+      if (draggedQuestion) {
+        e.stopPropagation();
+        setDragOverTopicForQuestion(topicKey);
+        setDragOverQuestion(null);
+      } else {
+        setDragOverTopicKey(topicKey);
+      }
+    },
     onDrop: (e) => {
       e.preventDefault();
-      if (draggedTopicKey && draggedTopicKey !== topicKey) {
+      if (draggedQuestion) {
+        e.stopPropagation();
+        if (draggedQuestion.topicKey !== topicKey) {
+          moveQuestionAcrossTopics(draggedQuestion.topicKey, topicKey, draggedQuestion.qId, null);
+          setExpandedTopicKeys((prev) => new Set(prev).add(topicKey));
+        }
+        setDraggedQuestion(null); setDragOverQuestion(null); setDragOverTopicForQuestion(null);
+      } else if (draggedTopicKey && draggedTopicKey !== topicKey) {
         const fromIndex = activePaperNode.topics.findIndex((t) => t._key === draggedTopicKey);
         const toIndex = activePaperNode.topics.findIndex((t) => t._key === topicKey);
         if (fromIndex !== -1 && toIndex !== -1) moveTopicToPosition(fromIndex, toIndex);
+        setDraggedTopicKey(null); setDragOverTopicKey(null);
       }
-      setDraggedTopicKey(null); setDragOverTopicKey(null);
     },
     onDragEnd: () => { setDraggedTopicKey(null); setDragOverTopicKey(null); },
+    onDragLeave: () => { if (dragOverTopicForQuestion === topicKey) setDragOverTopicForQuestion(null); },
   });
 
   const generateAndPreviewPdf = async () => {
@@ -1267,11 +1268,10 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
                           onMoveUp={() => moveTopic(tIndex, -1)}
                           onMoveDown={() => moveTopic(tIndex, 1)}
                           onAddTitlePage={() => { setTitlePageModalTopicKey(topNode._key); setTitlePageModalValue(""); }}
-                          dragHandlers={topicDragHandlers(topNode._key)}
+                          dragHandlers={topicHeaderDragHandlers(topNode._key)}
                           isDragOver={dragOverTopicKey === topNode._key}
                           isDragging={draggedTopicKey === topNode._key}
                           isQuestionDragTarget={dragOverTopicForQuestion === topNode._key}
-                          questionDropHandlers={questionDropOnTopicHandlers(topNode._key)}
                         />
                         {isExpanded && (
                           <div className="flex flex-col gap-1 pl-2">
