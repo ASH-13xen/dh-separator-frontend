@@ -24,6 +24,7 @@ import {
   FileText,
   RotateCcw,
   ArrowRightLeft,
+  Users,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -121,6 +122,116 @@ function MilestoneToast({ toast, onDismiss }) {
       <button onClick={onDismiss} className="ml-auto text-gray-500 hover:text-white relative z-10 cursor-pointer shrink-0">
         <X className="w-4 h-4" />
       </button>
+    </div>
+  );
+}
+
+// Read-only roster of every topper whose answer sheets have been uploaded for this subject,
+// so the user can recall who they've already covered before uploading more.
+function TopperRosterModal({ subjectName, data, isLoading, error, onClose }) {
+  const formatDetail = (entry) => {
+    const parts = [];
+    if (entry.year) parts.push(`Year ${entry.year}`);
+    if (entry.rank) parts.push(`Rank ${entry.rank}`);
+    if (entry.marks) parts.push(`Marks ${entry.marks}`);
+    return parts.length > 0 ? parts.join("  ·  ") : "No year/rank/marks recorded";
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-white">Toppers Uploaded</h3>
+            <p className="text-xs text-gray-400 truncate">
+              {isLoading || !data
+                ? subjectName
+                : `${subjectName} — ${data.toppers.length} topper${data.toppers.length !== 1 ? "s" : ""}, ${data.totalSheets} answer sheet${data.totalSheets !== 1 ? "s" : ""}`}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-7 h-7 text-indigo-500 animate-spin" />
+              <p className="text-sm text-gray-400">Loading toppers…</p>
+            </div>
+          ) : error ? (
+            <div className="bg-red-500/10 border border-red-500/40 rounded-xl px-4 py-3 text-sm text-red-300">
+              {error}
+            </div>
+          ) : !data || data.toppers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-9 h-9 text-gray-700 mx-auto mb-3" />
+              <p className="text-sm text-gray-400 font-semibold">No topper answer sheets uploaded yet</p>
+              <p className="text-xs text-gray-500 mt-1">Upload answer sheets for {subjectName} to see them listed here.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {data.toppers.map((topper) => (
+                <div
+                  key={topper.name}
+                  className="bg-gray-800/50 border border-gray-700/60 rounded-xl px-4 py-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <UserCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span className="font-bold text-white text-sm truncate">{topper.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-black text-indigo-300 bg-indigo-500/15 px-2 py-1 rounded-full whitespace-nowrap">
+                        {topper.sheetCount} sheet{topper.sheetCount !== 1 ? "s" : ""}
+                      </span>
+                      <span className="text-[10px] font-black text-purple-300 bg-purple-500/15 px-2 py-1 rounded-full whitespace-nowrap">
+                        {topper.questionCount} question{topper.questionCount !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {topper.entries.map((entry, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-3 text-xs text-gray-400 pl-6.5"
+                    >
+                      <span>{formatDetail(entry)}</span>
+                      {topper.entries.length > 1 && (
+                        <span className="text-[10px] text-gray-500 font-bold shrink-0">
+                          ×{entry.sheetCount}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {data.questionsWithoutSheets > 0 && (
+                <p className="text-[11px] text-amber-400/80 mt-1">
+                  {data.questionsWithoutSheets} question{data.questionsWithoutSheets !== 1 ? "s have" : " has"} no
+                  topper answer sheet uploaded.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -418,6 +529,12 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [editingQuestionValue, setEditingQuestionValue] = useState("");
   const [titlePageModalTopicKey, setTitlePageModalTopicKey] = useState(null);
   const [titlePageModalValue, setTitlePageModalValue] = useState("");
+
+  // Topper roster modal
+  const [isTopperModalOpen, setIsTopperModalOpen] = useState(false);
+  const [topperRoster, setTopperRoster] = useState(null);
+  const [isLoadingToppers, setIsLoadingToppers] = useState(false);
+  const [topperRosterError, setTopperRosterError] = useState("");
 
   const [draggedQuestion, setDraggedQuestion] = useState(null); // { topicKey, qId }
   const [dragOverQuestion, setDragOverQuestion] = useState(null);
@@ -1118,6 +1235,23 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     }
   };
 
+  // Fetched fresh on every open so it reflects any uploads made since the page loaded.
+  const openTopperRoster = async () => {
+    setIsTopperModalOpen(true);
+    setIsLoadingToppers(true);
+    setTopperRosterError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/toppers`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load toppers.");
+      setTopperRoster(data);
+    } catch (err) {
+      setTopperRosterError(err.message);
+    } finally {
+      setIsLoadingToppers(false);
+    }
+  };
+
   const cleanupStorage = async () => {
     const confirmed = window.confirm(
       `This will permanently delete all compiled ${subjectName} book files from server storage to free up space. Job history and selections are kept. Continue?`,
@@ -1155,6 +1289,14 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-10 font-sans relative flex flex-col items-center">
       <div className="max-w-[1600px] w-full text-center mb-8 relative">
         <div className="absolute top-0 right-0 flex items-center gap-2">
+          <button
+            onClick={openTopperRoster}
+            title="See which toppers' answer sheets have been uploaded for this subject"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-indigo-400 hover:border-indigo-500/40 transition-colors cursor-pointer"
+          >
+            <Users className="w-3.5 h-3.5" />
+            View Toppers
+          </button>
           <button
             onClick={reclassifyNewQuestions}
             disabled={isReclassifying}
@@ -1385,6 +1527,16 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       )}
 
       <MilestoneToast toast={activeToast} onDismiss={() => setActiveToast(null)} />
+
+      {isTopperModalOpen && (
+        <TopperRosterModal
+          subjectName={subjectName}
+          data={topperRoster}
+          isLoading={isLoadingToppers}
+          error={topperRosterError}
+          onClose={() => setIsTopperModalOpen(false)}
+        />
+      )}
 
       {titlePageModalTopicKey && (
         <AddTitlePageModal
