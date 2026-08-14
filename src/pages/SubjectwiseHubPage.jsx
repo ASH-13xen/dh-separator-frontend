@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { BookOpen, Plus, Loader2, RefreshCw, ArrowRight } from "lucide-react";
+import { BookOpen, Plus, Loader2, RefreshCw, ArrowRight, ClipboardList } from "lucide-react";
 import SubjectwiseSetupPage from "./SubjectwiseSetupPage";
 import SubjectwiseBookPage from "./SubjectwiseBookPage";
+import AllUploadsPage from "./AllUploadsPage";
 
 const API_BASE_URL =
   import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000";
 
 export default function SubjectwiseHubPage() {
-  const [view, setView] = useState("hub"); // "hub" | "setup" | "book"
+  const [view, setView] = useState("hub"); // "hub" | "setup" | "book" | "uploads"
   const [activeSubject, setActiveSubject] = useState(null); // { slug, name }
   const [subjects, setSubjects] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +46,26 @@ export default function SubjectwiseHubPage() {
           fetchSubjects();
         }}
       />
+    );
+  }
+
+  if (view === "uploads") {
+    return (
+      <div>
+        {/* Back bar */}
+        <div className="bg-[#0f172a] border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+          <button
+            onClick={() => setView("hub")}
+            className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+            All Subjects
+          </button>
+          <span className="text-gray-700">/</span>
+          <span className="text-xs font-bold text-indigo-300">All Uploads</span>
+        </div>
+        <AllUploadsPage />
+      </div>
     );
   }
 
@@ -95,6 +116,13 @@ export default function SubjectwiseHubPage() {
               title="Refresh list"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={() => setView("uploads")}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 hover:border-indigo-500/60 text-gray-300 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              Display All Uploads
             </button>
             <button
               onClick={() => setView("setup")}

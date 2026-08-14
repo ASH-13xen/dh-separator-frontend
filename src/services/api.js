@@ -137,6 +137,18 @@ export const updateQuestion = async (id, data) => {
   }
 };
 
+export const updateUploadRecord = async (id, data) => {
+  console.log(`[api] PUT /api/subjects/uploads/${id}`, data);
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/subjects/uploads/${id}`, data);
+    console.log('[api] PUT /api/subjects/uploads/:id — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] PUT /api/subjects/uploads/:id — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to update upload record.' };
+  }
+};
+
 export const updateToppers = async (updates) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/upload/update-toppers`, { updates });
