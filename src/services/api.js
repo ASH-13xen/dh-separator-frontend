@@ -137,15 +137,39 @@ export const updateQuestion = async (id, data) => {
   }
 };
 
-export const updateUploadRecord = async (id, data) => {
-  console.log(`[api] PUT /api/subjects/uploads/${id}`, data);
+export const fetchUploadBatches = async () => {
+  console.log('[api] GET /api/subjects/uploads/batches');
   try {
-    const response = await axios.put(`${API_BASE_URL}/api/subjects/uploads/${id}`, data);
-    console.log('[api] PUT /api/subjects/uploads/:id — success:', response.data);
+    const response = await axios.get(`${API_BASE_URL}/api/subjects/uploads/batches`);
+    console.log(`[api] GET /api/subjects/uploads/batches — success: ${response.data.length} batch(es)`);
     return response.data;
   } catch (error) {
-    console.error('[api] PUT /api/subjects/uploads/:id — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
-    throw error.response?.data || { error: 'Failed to update upload record.' };
+    console.error('[api] GET /api/subjects/uploads/batches — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to load uploads.' };
+  }
+};
+
+export const updateUploadBatch = async (batchKey, data) => {
+  console.log(`[api] PUT /api/subjects/uploads/batches/${batchKey}`, data);
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/subjects/uploads/batches/${encodeURIComponent(batchKey)}`, data);
+    console.log('[api] PUT /api/subjects/uploads/batches/:batchKey — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] PUT /api/subjects/uploads/batches/:batchKey — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to update upload.' };
+  }
+};
+
+export const deleteUploadBatch = async (batchKey) => {
+  console.log(`[api] DELETE /api/subjects/uploads/batches/${batchKey}`);
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/subjects/uploads/batches/${encodeURIComponent(batchKey)}`);
+    console.log('[api] DELETE /api/subjects/uploads/batches/:batchKey — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] DELETE /api/subjects/uploads/batches/:batchKey — FAILED. Status:', error.response?.status, 'Body:', error.response?.data, 'Raw error:', error);
+    throw error.response?.data || { error: 'Failed to delete upload.' };
   }
 };
 
