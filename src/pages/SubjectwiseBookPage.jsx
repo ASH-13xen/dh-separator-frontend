@@ -554,11 +554,19 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
 
   const skipNextAutoSave = useRef(true);
 
+  // Papers with unsaved edits (a Set of paper names), the id of the currently-armed debounce
+  // timer, and a ref that always points at the latest saveLayoutForPaper closure — see
+  // flushDirtyPapers below for why this trio exists.
+  const dirtyPapersRef = useRef(new Set());
+  const pendingSaveTimerRef = useRef(null);
+  const saveLayoutForPaperRef = useRef(null);
+
   useEffect(() => {
     fetchPreview();
   }, [subject]);
 
   const fetchPreview = async () => {
+    flushDirtyPapers();
     setIsLoading(true);
     skipNextAutoSave.current = true;
     setPsirData([]);
@@ -667,19 +675,63 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       }
     }
   };
+  // Keep a ref to the freshest saveLayoutForPaper on every render — flushDirtyPapers is called
+  // from places (unmount cleanup, the paper-switch handler) whose own closure can be stale, but
+  // going through this ref always reaches the latest psirData/selections/etc regardless.
+  saveLayoutForPaperRef.current = saveLayoutForPaper;
 
+  // Saves every paper with unsaved edits right now, instead of only whichever paper happens to
+  // be active. Cancels any still-pending debounce timer first (its job is now done here) and
+  // empties the dirty set so nothing gets saved twice. Safe to call from a stale closure (e.g.
+  // an unmount cleanup captured at mount time) since it only ever reads through refs.
+  const flushDirtyPapers = () => {
+    if (pendingSaveTimerRef.current) {
+      clearTimeout(pendingSaveTimerRef.current);
+      pendingSaveTimerRef.current = null;
+    }
+    const papers = [...dirtyPapersRef.current];
+    dirtyPapersRef.current.clear();
+    papers.forEach((paper) => saveLayoutForPaperRef.current(paper));
+  };
+
+  // Marks the active paper dirty and (re)arms a single shared debounce timer that flushes every
+  // dirty paper 800ms after the last edit. Previously this saved only whatever `activePaper` was
+  // at the moment the timer fired, and switching papers (or subjects) before that moment cleared
+  // the timer outright — silently discarding an edit that had already shown "Saved" for a
+  // *different* paper. Tracking dirtiness in a ref (independent of the timer) means a paper's
+  // edit survives being interrupted by navigation; flushDirtyPapers is also called directly
+  // wherever that navigation happens (paper tabs, fetchPreview, unmount) so it doesn't have to
+  // wait the full 800ms first.
   useEffect(() => {
     if (skipNextAutoSave.current) {
       skipNextAutoSave.current = false;
       return;
     }
     if (!activePaper) return;
-    const timer = setTimeout(() => {
-      saveLayoutForPaper(activePaper);
+    dirtyPapersRef.current.add(activePaper);
+    if (pendingSaveTimerRef.current) clearTimeout(pendingSaveTimerRef.current);
+    pendingSaveTimerRef.current = setTimeout(() => {
+      pendingSaveTimerRef.current = null;
+      flushDirtyPapers();
     }, 800);
-    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [psirData, selections, includedQuestions, expandedTopicKeys]);
+
+  // Flush on unmount (e.g. navigating back to "All Subjects", which unmounts this component)
+  // and warn before an actual tab close/refresh, which no cleanup can reliably outrun.
+  useEffect(() => {
+    return () => flushDirtyPapers();
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (dirtyPapersRef.current.size === 0 && !pendingSaveTimerRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     if (saveStatus !== "error") return;
@@ -844,6 +896,9 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       newData[toPaperIdx].topics[toTIdx].questions = [...toTopics[toTIdx].questions, movedQ];
       return newData;
     });
+    // The generic autosave effect only ever marks `activePaper` (the source) dirty — this move
+    // also touches the destination paper's topics, so it needs marking explicitly too.
+    dirtyPapersRef.current.add(moveToPaperPaper);
     setMoveToPaperModal(null);
   };
 
@@ -1341,7 +1396,10 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
                 return (
                   <button
                     key={paperObj.paper}
-                    onClick={() => setActivePaper(paperObj.paper)}
+                    onClick={() => {
+                      if (!isActive) flushDirtyPapers();
+                      setActivePaper(paperObj.paper);
+                    }}
                     className={`flex-1 min-w-[120px] flex flex-col items-center py-3 px-4 rounded-xl transition-all cursor-pointer ${
                       isActive
                         ? "bg-linear-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/10"
