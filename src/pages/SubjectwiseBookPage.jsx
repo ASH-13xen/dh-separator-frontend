@@ -560,6 +560,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const dirtyPapersRef = useRef(new Set());
   const pendingSaveTimerRef = useRef(null);
   const saveLayoutForPaperRef = useRef(null);
+  const sendLayoutBeaconRef = useRef(null);
 
   useEffect(() => {
     fetchPreview();
@@ -609,9 +610,11 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     }
   };
 
-  const saveLayoutForPaper = async (paper, attempt = 1) => {
+  // Builds the exact save payload for one paper from current state. Shared by the normal
+  // fetch-based save and the sendBeacon-based one used right before the page unloads.
+  const buildLayoutPayload = (paper) => {
     const paperNode = psirData.find((p) => p.paper === paper);
-    if (!paperNode) return;
+    if (!paperNode) return null;
 
     const topicOrder = paperNode.topics.map((t) => t._key);
     const topicRenames = {};
@@ -646,23 +649,30 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       });
     });
 
+    return {
+      paper,
+      topicOrder,
+      topicRenames,
+      questionOrder,
+      excludedQuestionIds: paperExcluded,
+      selections: paperSelections,
+      topperOverrides,
+      expandedTopics,
+      questionTextOverrides,
+      titlePages,
+    };
+  };
+
+  const saveLayoutForPaper = async (paper, attempt = 1) => {
+    const payload = buildLayoutPayload(paper);
+    if (!payload) return;
+
     setSaveStatus(attempt > 1 ? "retrying" : "saving");
     try {
       const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/layout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paper,
-          topicOrder,
-          topicRenames,
-          questionOrder,
-          excludedQuestionIds: paperExcluded,
-          selections: paperSelections,
-          topperOverrides,
-          expandedTopics,
-          questionTextOverrides,
-          titlePages,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`Save failed with status ${res.status}`);
       setSaveStatus("saved");
@@ -675,10 +685,31 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       }
     }
   };
-  // Keep a ref to the freshest saveLayoutForPaper on every render — flushDirtyPapers is called
-  // from places (unmount cleanup, the paper-switch handler) whose own closure can be stale, but
-  // going through this ref always reaches the latest psirData/selections/etc regardless.
+
+  // A plain fetch() started as the page is unloading (refresh, close, navigate away) can be
+  // cancelled by the browser before it ever reaches the server — that's the actual cause of
+  // "I toggled something, refreshed, and it's gone": the debounced save simply never got to
+  // finish. sendBeacon is the browser API built specifically to survive this — it's queued and
+  // guaranteed to be attempted even after the page is gone, unlike fetch. No response/retry is
+  // possible (the page is leaving either way), so this is deliberately best-effort.
+  const sendLayoutBeacon = (paper) => {
+    const payload = buildLayoutPayload(paper);
+    if (!payload || !navigator.sendBeacon) return false;
+    try {
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      return navigator.sendBeacon(`${API_BASE_URL}/api/subjects/${subject}/layout`, blob);
+    } catch (err) {
+      console.error("[SubjectwiseBookPage] sendBeacon failed:", err);
+      return false;
+    }
+  };
+
+  // Refs always pointing at this render's freshest save functions — flushDirtyPapers and the
+  // beforeunload handler are called from places (unmount cleanup, effects with empty deps
+  // arrays) whose own closure can be stale, but going through these refs always reaches the
+  // latest psirData/selections/etc regardless.
   saveLayoutForPaperRef.current = saveLayoutForPaper;
+  sendLayoutBeaconRef.current = sendLayoutBeacon;
 
   // Saves every paper with unsaved edits right now, instead of only whichever paper happens to
   // be active. Cancels any still-pending debounce timer first (its job is now done here) and
@@ -726,6 +757,11 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (dirtyPapersRef.current.size === 0 && !pendingSaveTimerRef.current) return;
+      // Actually attempt to persist every dirty paper via sendBeacon — see sendLayoutBeacon
+      // above for why this, and not fetch, is what can survive the page unloading. Still show
+      // the confirmation prompt too, as a second line of defense in case the beacon doesn't
+      // land (e.g. no navigator.sendBeacon support).
+      [...dirtyPapersRef.current].forEach((paper) => sendLayoutBeaconRef.current(paper));
       e.preventDefault();
       e.returnValue = "";
     };
