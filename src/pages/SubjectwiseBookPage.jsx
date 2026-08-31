@@ -1074,28 +1074,43 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     const newText = editingQuestionValue.trim();
     if (!newText) { setEditingQuestionId(null); return; }
 
+    // Detect a same-paper duplicate BEFORE touching state (a plain read of the current
+    // psirData, not inside the setPsirData updater — window.confirm has no business running
+    // inside a state-updater function, which React can invoke more than once). Previously this
+    // merge happened silently: editing a question's text so it exactly matched another one
+    // deleted the edited question outright (folding its answer sheets into the match) with no
+    // indication that's what happened — it just looked like the question vanished.
+    const paperNode = psirData.find((p) => p.paper === activePaper);
+    if (!paperNode) { setEditingQuestionId(null); return; }
+
+    let editedTopicKey = null;
+    let mergeTarget = null;
+    let mergeTargetTopicKey = null;
+    paperNode.topics.forEach((t) => {
+      t.questions.forEach((q) => {
+        if (q._id === editingQuestionId) editedTopicKey = t._key;
+        else if (!q.isTitlePage && q.question_text.trim() === newText && !mergeTarget) {
+          mergeTarget = q;
+          mergeTargetTopicKey = t._key;
+        }
+      });
+    });
+
+    if (mergeTarget) {
+      const proceed = window.confirm(
+        `This exact text already belongs to another question, in topic "${mergeTargetTopicKey}":\n\n"${mergeTarget.question_text}"\n\nSaving will merge this question's answer sheet(s) into that one and remove this entry. This can't be undone.\n\nContinue?`
+      );
+      if (!proceed) return; // Leave editing open so the text can be revised instead.
+    }
+
     setPsirData((prev) => {
       const newData = [...prev];
       const paperIdx = newData.findIndex((p) => p.paper === activePaper);
       if (paperIdx === -1) return prev;
 
-      // Find edited question and any other question in this paper with the same text.
-      let editedTopicKey = null;
-      let mergeTargetId = null;
-      let mergeTargetTopicKey = null;
-
-      newData[paperIdx].topics.forEach((t) => {
-        t.questions.forEach((q) => {
-          if (q._id === editingQuestionId) editedTopicKey = t._key;
-          else if (!q.isTitlePage && q.question_text.trim() === newText && !mergeTargetId) {
-            mergeTargetId = q._id;
-            mergeTargetTopicKey = t._key;
-          }
-        });
-      });
-
-      if (mergeTargetId) {
+      if (mergeTarget) {
         // Merge: combine file_urls into the existing question, remove the edited duplicate.
+        const mergeTargetId = mergeTarget._id;
         let editedFileUrls = [];
         newData[paperIdx].topics.forEach((t) => {
           t.questions.forEach((q) => { if (q._id === editingQuestionId) editedFileUrls = q.file_urls || []; });
