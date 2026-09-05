@@ -25,6 +25,7 @@ import {
   RotateCcw,
   ArrowRightLeft,
   Users,
+  Layers,
 } from "lucide-react";
 
 const API_BASE_URL =
@@ -278,6 +279,100 @@ function AddTitlePageModal({ value, onChange, onAdd, onCancel }) {
   );
 }
 
+// Lets the user pick any subset of a subject's units to merge into one combined book (or hit
+// Select All). Ordering here doesn't matter — the backend always compiles selected units back
+// in the subject's own unit order, so a combined book from units 1, 3, 6 always reads as a
+// book with units 1, 2, 3 inside, regardless of click order.
+function UnitPickerModal({ papers, onGenerate, onCancel }) {
+  const [selected, setSelected] = useState(() => new Set(papers.map((p) => p.paper)));
+  const allSelected = selected.size === papers.length;
+
+  const toggle = (paper) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(paper)) next.delete(paper);
+      else next.add(paper);
+      return next;
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full shadow-2xl flex flex-col max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <Layers className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-white">Generate Combined Book</h3>
+            <p className="text-xs text-gray-400 truncate">Pick which units to merge into one book</p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex flex-col gap-2">
+          <button
+            onClick={() => setSelected(allSelected ? new Set() : new Set(papers.map((p) => p.paper)))}
+            className="flex items-center gap-2 text-xs font-black text-indigo-300 hover:text-indigo-200 mb-2 cursor-pointer uppercase tracking-widest"
+          >
+            {allSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+            {allSelected ? "Deselect All" : "Select All"}
+          </button>
+          {papers.map((p) => (
+            <label
+              key={p.paper}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gray-800/50 border border-gray-700/60 cursor-pointer hover:bg-gray-800 transition-colors"
+            >
+              <input
+                type="checkbox"
+                className="hidden"
+                checked={selected.has(p.paper)}
+                onChange={() => toggle(p.paper)}
+              />
+              {selected.has(p.paper) ? (
+                <CheckSquare className="w-4 h-4 text-indigo-400 shrink-0" />
+              ) : (
+                <Square className="w-4 h-4 text-gray-500 shrink-0" />
+              )}
+              <span className="text-sm text-gray-200 font-semibold flex-1 truncate">{p.paper}</span>
+              <span className="text-[10px] text-gray-500 font-bold shrink-0">
+                {p.topics.reduce((acc, t) => acc + t.questions.length, 0)} Qs
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="p-6 border-t border-gray-800 flex justify-end gap-3 shrink-0">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onGenerate([...selected])}
+            disabled={selected.size === 0}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 text-xs cursor-pointer"
+          >
+            <BookOpen className="w-4 h-4" /> Generate ({selected.size})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TopicGroupHeader({
   topicNode, tIndex, totalTopics, stats, variant,
   isExpanded, onToggleExpand, isSelected, onSelect,
@@ -508,7 +603,9 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [activePaper, setActivePaper] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingLabel, setGeneratingLabel] = useState(null); // display label for whatever is currently generating (single paper name, or "Combined Book (N Units)")
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showUnitPickerModal, setShowUnitPickerModal] = useState(false);
   const [psirData, setPsirData] = useState([]);
   const [selections, setSelections] = useState({});
   const [includedQuestions, setIncludedQuestions] = useState(new Set());
@@ -1233,6 +1330,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
 
   const generateAndPreviewPdf = async () => {
     if (!activePaperNode) return;
+    setGeneratingLabel(activePaper);
     setIsGenerating(true);
     setGenerationStatus("pending");
     setPdfBlobUrl(null);
@@ -1254,6 +1352,37 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.error || "Failed to start PDF book generation.");
+      }
+      const data = await response.json();
+      pollJobStatus(data.jobId);
+    } catch (err) {
+      alert(err.message);
+      setIsGenerating(false);
+    }
+  };
+
+  // Generates one combined book out of several selected units — one shared index, one
+  // deduplicated topper page, units relabeled 1..N inside that book only. Reuses the exact
+  // same polling/preview/download plumbing as the single-paper generator above; the backend
+  // derives every selected unit's questions fresh from its saved layout (BookLayout), so this
+  // reflects whatever was last saved per unit rather than requiring all units to be open at once.
+  const generateCombinedBook = async (selectedPapers) => {
+    if (!selectedPapers || selectedPapers.length === 0) return;
+    flushDirtyPapers();
+    setShowUnitPickerModal(false);
+    setGeneratingLabel(`Combined Book (${selectedPapers.length} Unit${selectedPapers.length !== 1 ? "s" : ""})`);
+    setIsGenerating(true);
+    setGenerationStatus("pending");
+    setPdfBlobUrl(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subjects/${subject}/generate-collective`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ papers: selectedPapers }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to start combined PDF book generation.");
       }
       const data = await response.json();
       pollJobStatus(data.jobId);
@@ -1298,7 +1427,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       const localUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = localUrl;
-      link.download = `${subjectName}_${activePaper.replace(/[^a-z0-9]/gi, "_")}.pdf`;
+      link.download = `${subjectName}_${(generatingLabel || activePaper || "Book").replace(/[^a-z0-9]/gi, "_")}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1395,6 +1524,15 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-10 font-sans relative flex flex-col items-center">
       <div className="max-w-[1600px] w-full text-center mb-8 relative">
         <div className="absolute top-0 right-0 flex items-center gap-2">
+          <button
+            onClick={() => setShowUnitPickerModal(true)}
+            disabled={psirData.length === 0}
+            title="Combine any subset of units into one book with a single shared index and topper page"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Generate All Books
+          </button>
           <button
             onClick={openTopperRoster}
             title="See which toppers' answer sheets have been uploaded for this subject"
@@ -1647,6 +1785,14 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
         />
       )}
 
+      {showUnitPickerModal && (
+        <UnitPickerModal
+          papers={psirData}
+          onGenerate={generateCombinedBook}
+          onCancel={() => setShowUnitPickerModal(false)}
+        />
+      )}
+
       {titlePageModalTopicKey && (
         <AddTitlePageModal
           value={titlePageModalValue}
@@ -1661,7 +1807,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
           <div className="relative bg-gray-900 shadow-2xl w-full h-full max-w-full max-h-screen flex flex-col overflow-hidden">
             <div className="p-4 border-b border-gray-800 bg-gray-900/90 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-white mb-0.5">{activePaper} PDF Preview</h2>
+                <h2 className="text-lg font-bold text-white mb-0.5">{generatingLabel || activePaper} PDF Preview</h2>
                 <p className="text-xs text-gray-400">Review layout & page organization before exporting</p>
               </div>
               <button onClick={() => setShowPreviewModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-gray-800 hover:bg-gray-700 text-white transition-colors cursor-pointer">Back to Editing</button>
