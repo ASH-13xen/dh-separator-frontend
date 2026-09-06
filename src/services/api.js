@@ -173,6 +173,18 @@ export const deleteUploadBatch = async (batchKey) => {
   }
 };
 
+export const finalizeUploadReview = async (records) => {
+  console.log(`[api] POST /api/upload/finalize — ${records.length} record(s)`);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/upload/finalize`, { records });
+    console.log('[api] POST /api/upload/finalize — success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[api] POST /api/upload/finalize — FAILED. Status:', error.response?.status, 'Body:', error.response?.data);
+    throw error.response?.data || { error: 'Failed to save reviewed questions.' };
+  }
+};
+
 export const updateToppers = async (updates) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/upload/update-toppers`, { updates });

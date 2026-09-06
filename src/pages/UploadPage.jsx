@@ -2,10 +2,99 @@ import React, { useState, useEffect } from 'react';
 import PdfUploader from '../components/PdfUploader';
 import ResultsViewer from '../components/ResultsViewer';
 import SubjectCombobox from '../components/SubjectCombobox';
-import { uploadPdf, updateToppers, fetchUsedSubjects } from '../services/api';
-import { AlertTriangle, CheckCircle2, Download, Save, X, RefreshCw, Loader2 } from 'lucide-react';
+import { uploadPdf, updateToppers, finalizeUploadReview, fetchUsedSubjects } from '../services/api';
+import { AlertTriangle, CheckCircle2, Download, Save, X, RefreshCw, Loader2, Languages, Trash2, Undo2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+const DEVANAGARI_RE = /[ऀ-ॿ]/;
+
+// One flagged question's review card — lets the user fix the text in place (most common:
+// deleting the leftover Hindi manually) or drop the question entirely. Nothing here is final
+// until "Save & Continue" is clicked; "Undo Remove" just un-marks it, it doesn't restore text.
+function HindiReviewCard({ item, onChangeText, onToggleRemove }) {
+  const stillHasHindi = DEVANAGARI_RE.test(item.question_text);
+  return (
+    <div className={`border rounded-xl p-4 space-y-3 transition-colors ${item.removed ? 'border-red-500/40 bg-red-950/20 opacity-60' : stillHasHindi ? 'border-amber-500/50 bg-amber-950/10' : 'border-emerald-500/40 bg-emerald-950/10'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${item.removed ? 'bg-red-500/20 text-red-300' : stillHasHindi ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+          {item.removed ? 'Will be removed' : stillHasHindi ? 'Still contains Hindi' : 'Looks clean'}
+        </span>
+        <button
+          type="button"
+          onClick={onToggleRemove}
+          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${item.removed ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-red-600/80 hover:bg-red-500 text-white'}`}
+        >
+          {item.removed ? <><Undo2 className="w-3.5 h-3.5" /> Undo Remove</> : <><Trash2 className="w-3.5 h-3.5" /> Remove Question</>}
+        </button>
+      </div>
+      <textarea
+        value={item.question_text}
+        disabled={item.removed}
+        onChange={(e) => onChangeText(e.target.value)}
+        rows={4}
+        className="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm text-gray-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+      />
+    </div>
+  );
+}
+
+// Shown only when prepareUpload flags at least one question as still containing Hindi after
+// its own auto-clean pass — the user resolves each one (edit or remove) before anything is
+// written to the database at all.
+function HindiReviewModal({ items, onChangeText, onToggleRemove, onConfirm, onCancel, isSaving }) {
+  const flagged = items.filter((it) => it.needsReview);
+  const unresolvedCount = flagged.filter((it) => !it.removed && DEVANAGARI_RE.test(it.question_text)).length;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-gray-800 bg-gray-800/30">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Languages className="text-amber-400" />
+            Review Ambiguous Questions
+          </h2>
+          <p className="text-gray-400 mt-1 text-sm">
+            <strong className="text-amber-300">{flagged.length}</strong> question{flagged.length !== 1 ? 's' : ''} still had Hindi text the tool couldn't confidently strip on its own.
+            Edit each one to keep only what you want, or remove it. Nothing is saved until you continue.
+          </p>
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
+          {flagged.map((item) => (
+            <HindiReviewCard
+              key={item.file_url}
+              item={item}
+              onChangeText={(text) => onChangeText(item.file_url, text)}
+              onToggleRemove={() => onToggleRemove(item.file_url)}
+            />
+          ))}
+        </div>
+
+        <div className="p-6 border-t border-gray-800 bg-gray-900 flex justify-between items-center gap-4">
+          <p className="text-xs text-gray-500">
+            {unresolvedCount > 0
+              ? `${unresolvedCount} still contain Hindi — you can still save if that's intentional (e.g. an untranslated quote).`
+              : 'All resolved.'}
+          </p>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={onCancel} disabled={isSaving} className="text-gray-400 hover:text-white px-4 py-2 font-medium transition-colors disabled:opacity-50">
+              Cancel Upload
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isSaving}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/50 transition-all disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              {isSaving ? 'Saving...' : 'Save & Continue'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function UploadPage({
   persistedFile, setPersistedFile,
@@ -21,6 +110,12 @@ export default function UploadPage({
   const [detectedToppers, setDetectedToppers] = useState([]);
   const [isUpdatingToppers, setIsUpdatingToppers] = useState(false);
 
+  // Hindi-ambiguity review modal state — populated when prepareUpload flags at least one
+  // question, holding it back from the database until the user resolves it here.
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewItems, setReviewItems] = useState([]); // full prepared record list (flagged + clean), keyed by file_url
+  const [isFinalizingReview, setIsFinalizingReview] = useState(false);
+
   useEffect(() => {
     console.log('[UploadPage] Fetching list of used subjects...');
     fetchUsedSubjects()
@@ -30,6 +125,27 @@ export default function UploadPage({
       })
       .catch((err) => console.error('[UploadPage] Failed to load used subjects:', err));
   }, []);
+
+  // Shared tail of both the "nothing needed review" fast path and the post-review finalize
+  // step — opens the existing topper-details modal when applicable, exactly as before.
+  const openTopperModalIfNeeded = (generatedData) => {
+    setPersistedResults(generatedData);
+
+    const maxIndex = Math.max(0, ...generatedData.map(q => q.answer_sheet_index || 1));
+
+    if (maxIndex > 0) {
+      console.log(`[UploadPage] Detected ${maxIndex} distinct topper answer sheet(s). Opening topper details modal.`);
+      const initialToppers = Array.from({ length: maxIndex }).map((_, i) => ({
+        sheetIndex: i + 1,
+        topperName: '',
+        topperYear: '',
+        topperRank: '',
+        topperMarks: ''
+      }));
+      setDetectedToppers(initialToppers);
+      setShowTopperModal(true);
+    }
+  };
 
   const handleFileSubmit = async () => {
     if (!persistedFile) {
@@ -49,25 +165,17 @@ export default function UploadPage({
     try {
       const response = await uploadPdf(persistedFile, undefined, subject.trim());
       const generatedData = response.data;
-      console.log(`[UploadPage] Upload succeeded. Received ${generatedData.length} question record(s).`, generatedData);
-      setPersistedResults(generatedData);
+      console.log(`[UploadPage] Upload succeeded. Received ${generatedData.length} question record(s). needsReview=${response.needsReview}`, generatedData);
 
-      // Detect number of unique toppers based on answer_sheet_index
-      const maxIndex = Math.max(0, ...generatedData.map(q => q.answer_sheet_index || 1));
-
-      if (maxIndex > 0) {
-        console.log(`[UploadPage] Detected ${maxIndex} distinct topper answer sheet(s). Opening topper details modal.`);
-        // Prepare initial empty states for each detected topper sheet
-        const initialToppers = Array.from({ length: maxIndex }).map((_, i) => ({
-          sheetIndex: i + 1,
-          topperName: '',
-          topperYear: '',
-          topperRank: '',
-          topperMarks: ''
-        }));
-        setDetectedToppers(initialToppers);
-        setShowTopperModal(true); // Open Modal
+      if (response.needsReview) {
+        // Nothing has been saved yet — hold everything here until the user resolves each
+        // flagged question, then finalizeReview() actually writes to the database.
+        setReviewItems(generatedData.map(r => ({ ...r, removed: false })));
+        setShowReviewModal(true);
+        return;
       }
+
+      openTopperModalIfNeeded(generatedData);
 
     } catch (err) {
       console.error('[UploadPage] Upload failed:', err);
@@ -76,6 +184,48 @@ export default function UploadPage({
     } finally {
       setIsLoading(false);
       console.log('[UploadPage] handleFileSubmit finished.');
+    }
+  };
+
+  const handleReviewTextChange = (fileUrl, text) => {
+    setReviewItems(prev => prev.map(item => item.file_url === fileUrl ? { ...item, question_text: text } : item));
+  };
+
+  const handleReviewToggleRemove = (fileUrl) => {
+    setReviewItems(prev => prev.map(item => item.file_url === fileUrl ? { ...item, removed: !item.removed } : item));
+  };
+
+  const handleReviewCancel = async () => {
+    setIsFinalizingReview(true);
+    try {
+      // Nothing was ever saved to the database, but every question's answer sheet is already
+      // uploaded to Cloudinary — mark the whole batch removed so finalizeUpload cleans those
+      // files up too, instead of silently leaking them.
+      await finalizeUploadReview(reviewItems.map(item => ({ ...item, removed: true })));
+    } catch (err) {
+      console.error('[UploadPage] Failed to clean up cancelled upload:', err);
+    } finally {
+      setIsFinalizingReview(false);
+      setShowReviewModal(false);
+      setReviewItems([]);
+      setPersistedFile(null);
+      setPersistedResults([]);
+    }
+  };
+
+  const handleReviewConfirm = async () => {
+    setIsFinalizingReview(true);
+    try {
+      const finalized = await finalizeUploadReview(reviewItems);
+      console.log(`[UploadPage] Review finalized. ${finalized.data.length} record(s) saved.`);
+      setShowReviewModal(false);
+      setReviewItems([]);
+      openTopperModalIfNeeded(finalized.data);
+    } catch (err) {
+      console.error('[UploadPage] Failed to finalize review:', err);
+      alert([err.error, err.details].filter(Boolean).join(' — ') || 'Failed to save reviewed questions.');
+    } finally {
+      setIsFinalizingReview(false);
     }
   };
 
@@ -268,6 +418,17 @@ export default function UploadPage({
         />
 
       </main>
+
+      {showReviewModal && (
+        <HindiReviewModal
+          items={reviewItems}
+          onChangeText={handleReviewTextChange}
+          onToggleRemove={handleReviewToggleRemove}
+          onConfirm={handleReviewConfirm}
+          onCancel={handleReviewCancel}
+          isSaving={isFinalizingReview}
+        />
+      )}
 
       {/* Post-Processing Topper Details Modal */}
       {showTopperModal && (
