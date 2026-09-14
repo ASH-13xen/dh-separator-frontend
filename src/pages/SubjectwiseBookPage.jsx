@@ -84,7 +84,7 @@ function SaveStatusBadge({ status }) {
     saving: { Icon: Loader2, text: "Saving…", className: "text-gray-400", spin: true },
     saved: { Icon: Check, text: "All changes saved", className: "text-emerald-400", spin: false },
     retrying: { Icon: RefreshCw, text: "Retrying save…", className: "text-amber-400", spin: true },
-    error: { Icon: CloudOff, text: "Save failed — will retry", className: "text-red-400", spin: false },
+    error: { Icon: CloudOff, text: "Save failed — see banner above", className: "text-red-400", spin: false },
   }[status];
   if (!config) return null;
   const { Icon } = config;
@@ -399,6 +399,8 @@ function TopicGroupHeader({
         {isList && <GripVertical className="w-4 h-4 text-gray-600 shrink-0 cursor-grab active:cursor-grabbing" />}
         {isList && (
           <button
+            draggable={false}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
             className="shrink-0 cursor-pointer"
             title="Expand/collapse topic"
@@ -407,7 +409,7 @@ function TopicGroupHeader({
           </button>
         )}
         {isList && (
-          <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div draggable={false} onMouseDown={(e) => e.stopPropagation()} className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button onClick={onMoveUp} disabled={tIndex === 0} className="p-0.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-white cursor-pointer" title="Move topic up">
               <ArrowUp className="w-2.5 h-2.5" />
             </button>
@@ -417,7 +419,7 @@ function TopicGroupHeader({
           </div>
         )}
         {isEditing ? (
-          <div className="flex items-center gap-1.5 flex-1" onClick={(e) => e.stopPropagation()}>
+          <div draggable={false} onMouseDown={(e) => e.stopPropagation()} className="flex items-center gap-1.5 flex-1" onClick={(e) => e.stopPropagation()}>
             <input
               autoFocus
               value={editingValue}
@@ -431,11 +433,23 @@ function TopicGroupHeader({
         ) : (
           <div className="flex items-center gap-1.5 min-w-0">
             <h3 className={`font-extrabold text-indigo-300 truncate ${isList ? "text-xs" : "text-sm"}`}>{topicNode.title}</h3>
-            <button onClick={(e) => { e.stopPropagation(); onEditStart(); }} className="p-0.5 rounded hover:bg-gray-700 text-gray-500 hover:text-indigo-300 transition-colors shrink-0 cursor-pointer" title="Edit topic name">
+            <button
+              draggable={false}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onEditStart(); }}
+              className="p-0.5 rounded hover:bg-gray-700 text-gray-500 hover:text-indigo-300 transition-colors shrink-0 cursor-pointer"
+              title="Edit topic name"
+            >
               <Pencil className="w-3 h-3" />
             </button>
             {isList && (
-              <button onClick={(e) => { e.stopPropagation(); onAddTitlePage(); }} className="p-0.5 rounded hover:bg-gray-700 text-gray-500 hover:text-amber-300 transition-colors shrink-0 cursor-pointer" title="Add a title/subsection page here">
+              <button
+                draggable={false}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onAddTitlePage(); }}
+                className="p-0.5 rounded hover:bg-gray-700 text-gray-500 hover:text-amber-300 transition-colors shrink-0 cursor-pointer"
+                title="Add a title/subsection page here"
+              >
                 <FileText className="w-3 h-3" />
               </button>
             )}
@@ -457,7 +471,12 @@ function MasterListRow({ q, isIncluded, selectedCount, isPulsing, onRowClick, on
       className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all border ${isDragOver ? "border-indigo-400 ring-1 ring-indigo-400/50" : "border-transparent"} ${isDragging ? "opacity-40" : ""} ${isIncluded ? "hover:bg-gray-800/60" : "opacity-50 hover:bg-gray-800/30"} ${isPulsing ? "bg-indigo-500/20" : ""}`}
     >
       <GripVertical className="w-3.5 h-3.5 text-gray-600 shrink-0" />
-      <button onClick={(e) => { e.stopPropagation(); onToggleInclude(); }} className="shrink-0 cursor-pointer">
+      <button
+        draggable={false}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onToggleInclude(); }}
+        className="shrink-0 cursor-pointer"
+      >
         {isIncluded ? <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> : <Square className="w-3.5 h-3.5 text-gray-500" />}
       </button>
       <span className="text-xs text-gray-300 truncate flex-1">{q.question_text}</span>
@@ -479,7 +498,13 @@ function TitlePageRow({ subtitle, variant, dragHandlers, isDragOver, isDragging,
       <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
       <span className={`text-amber-200 font-semibold flex-1 truncate ${isList ? "text-xs" : "text-sm"}`}>{subtitle}</span>
       <span className="shrink-0 text-[9px] font-black uppercase tracking-wide text-amber-500/70">Title Page</span>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="shrink-0 p-1 rounded hover:bg-amber-500/20 text-amber-500/70 hover:text-red-400 cursor-pointer" title="Delete this title page">
+      <button
+        draggable={false}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="shrink-0 p-1 rounded hover:bg-amber-500/20 text-amber-500/70 hover:text-red-400 cursor-pointer"
+        title="Delete this title page"
+      >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
     </div>
@@ -645,6 +670,10 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [moveToPaperTopicKey, setMoveToPaperTopicKey] = useState('');
 
   const [saveStatus, setSaveStatus] = useState("saved");
+  // Papers whose save exhausted every retry — drives the persistent failure banner below (the
+  // small status badge alone was too easy to miss, and its "will retry" text was actively
+  // wrong once retries were exhausted — nothing kept trying after that point).
+  const [failedPapers, setFailedPapers] = useState(new Set());
   const [celebratedMilestones, setCelebratedMilestones] = useState(new Set());
   const [activeToast, setActiveToast] = useState(null);
   const [pulsingQuestionIds, setPulsingQuestionIds] = useState(new Set());
@@ -670,6 +699,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     setPsirData([]);
     setActivePaper(null);
     setSelectedTopicKey(null);
+    setFailedPapers(new Set());
     try {
       const response = await fetch(`${API_BASE_URL}/api/subjects/${subject}/preview`);
       if (!response.ok) {
@@ -760,6 +790,14 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     };
   };
 
+  // The backend runs on Render's free tier, which spins down after ~15 minutes idle — the
+  // first request after that takes 20-30+ seconds to wake it back up (confirmed directly:
+  // 23.5s cold, under 1s once warm). The old 3-attempt/1.5-4.5s backoff was nowhere near long
+  // enough to survive that, so a save made right as the backend was asleep could silently burn
+  // through every retry before the server ever woke up — the toggle looked fine, but never
+  // actually persisted. This schedule adds up to ~84s of retrying, comfortably past a cold start.
+  const SAVE_RETRY_DELAYS_MS = [2000, 4000, 8000, 15000, 25000, 30000];
+
   const saveLayoutForPaper = async (paper, attempt = 1) => {
     const payload = buildLayoutPayload(paper);
     if (!payload) return;
@@ -773,12 +811,19 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
       });
       if (!res.ok) throw new Error(`Save failed with status ${res.status}`);
       setSaveStatus("saved");
+      setFailedPapers((prev) => {
+        if (!prev.has(paper)) return prev;
+        const next = new Set(prev);
+        next.delete(paper);
+        return next;
+      });
     } catch (err) {
       console.error("[SubjectwiseBookPage] Save attempt failed:", err);
-      if (attempt < 3) {
-        setTimeout(() => saveLayoutForPaper(paper, attempt + 1), 1500 * attempt);
+      if (attempt <= SAVE_RETRY_DELAYS_MS.length) {
+        setTimeout(() => saveLayoutForPaper(paper, attempt + 1), SAVE_RETRY_DELAYS_MS[attempt - 1]);
       } else {
         setSaveStatus("error");
+        setFailedPapers((prev) => new Set(prev).add(paper));
       }
     }
   };
@@ -820,6 +865,12 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     const papers = [...dirtyPapersRef.current];
     dirtyPapersRef.current.clear();
     papers.forEach((paper) => saveLayoutForPaperRef.current(paper));
+  };
+
+  // Manual retry from the failure banner — re-runs the full retry schedule (attempt 1) for
+  // every paper that exhausted it, rather than waiting for another edit to mark them dirty.
+  const handleRetryFailedSaves = () => {
+    [...failedPapers].forEach((paper) => saveLayoutForPaperRef.current(paper));
   };
 
   // Marks the active paper dirty and (re)arms a single shared debounce timer that flushes every
@@ -1522,6 +1573,28 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 md:p-10 font-sans relative flex flex-col items-center">
+      {failedPapers.size > 0 && (
+        <div className="sticky top-0 z-50 w-full max-w-[1600px] mb-6 bg-red-950/90 border border-red-500/60 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-red-950/40 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <CloudOff className="w-5 h-5 text-red-400 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-red-200">
+                {failedPapers.size} unit{failedPapers.size !== 1 ? "s" : ""} failed to save — {[...failedPapers].join(", ")}
+              </p>
+              <p className="text-xs text-red-300/80 mt-0.5">
+                The server may have been waking up from idle. Your edits are still here in the browser — click Retry once it's had a moment.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleRetryFailedSaves}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry Now
+          </button>
+        </div>
+      )}
       <div className="max-w-[1600px] w-full text-center mb-8 relative">
         <div className="absolute top-0 right-0 flex items-center gap-2">
           <button
