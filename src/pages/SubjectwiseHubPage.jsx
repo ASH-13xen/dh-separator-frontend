@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BookOpen, Plus, Loader2, RefreshCw, ArrowRight, ClipboardList } from "lucide-react";
+import { BookOpen, Plus, Loader2, RefreshCw, ArrowRight, ClipboardList, Trophy } from "lucide-react";
 import SubjectwiseSetupPage from "./SubjectwiseSetupPage";
 import SubjectwiseBookPage from "./SubjectwiseBookPage";
 import AllUploadsPage from "./AllUploadsPage";
@@ -9,7 +9,7 @@ const API_BASE_URL =
 
 export default function SubjectwiseHubPage() {
   const [view, setView] = useState("hub"); // "hub" | "setup" | "book" | "uploads"
-  const [activeSubject, setActiveSubject] = useState(null); // { slug, name }
+  const [activeSubject, setActiveSubject] = useState(null); // { slug, name, parentName?, topperFilter? }
   const [subjects, setSubjects] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -19,7 +19,13 @@ export default function SubjectwiseHubPage() {
       const res = await fetch(`${API_BASE_URL}/api/subjects/registry?status=active`);
       if (!res.ok) throw new Error("Failed to load subjects.");
       const data = await res.json();
-      setSubjects(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      // Topper books sit right after the subject they were copied from.
+      const originals = list.filter((s) => !s.parentSlug);
+      const originalSlugs = new Set(originals.map((s) => s.slug));
+      const ordered = originals.flatMap((o) => [o, ...list.filter((s) => s.parentSlug === o.slug)]);
+      list.forEach((s) => { if (s.parentSlug && !originalSlugs.has(s.parentSlug)) ordered.push(s); });
+      setSubjects(ordered);
     } catch (err) {
       console.error(err);
     } finally {
@@ -32,7 +38,7 @@ export default function SubjectwiseHubPage() {
   }, []);
 
   const openSubject = (subject) => {
-    setActiveSubject({ slug: subject.slug, name: subject.name });
+    setActiveSubject({ slug: subject.slug, name: subject.name, parentName: subject.parentName, topperFilter: subject.topperFilter });
     setView("book");
   };
 
@@ -84,7 +90,14 @@ export default function SubjectwiseHubPage() {
           <span className="text-gray-700">/</span>
           <span className="text-xs font-bold text-indigo-300">{activeSubject.name}</span>
         </div>
-        <SubjectwiseBookPage subject={activeSubject.slug} subjectName={activeSubject.name} />
+        <SubjectwiseBookPage
+          key={activeSubject.slug}
+          subject={activeSubject.slug}
+          subjectName={activeSubject.name}
+          topperBook={activeSubject.parentName ? { parentName: activeSubject.parentName, topperFilter: activeSubject.topperFilter } : null}
+          onOpenBook={(info) => { openSubject(info); fetchSubjects(); }}
+          onDeleted={() => { setView("hub"); setActiveSubject(null); fetchSubjects(); }}
+        />
       </div>
     );
   }
@@ -163,21 +176,34 @@ export default function SubjectwiseHubPage() {
                 className="bg-gray-900/60 border border-gray-800 hover:border-indigo-500/60 rounded-2xl p-5 text-left transition-all group cursor-pointer hover:bg-gray-900/80 hover:shadow-lg hover:shadow-indigo-500/5"
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center shrink-0 group-hover:bg-indigo-600/30 transition-colors">
-                    <BookOpen className="w-5 h-5 text-indigo-400" />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${subject.parentSlug ? "bg-amber-500/15 group-hover:bg-amber-500/25" : "bg-indigo-600/20 group-hover:bg-indigo-600/30"}`}>
+                    {subject.parentSlug ? <Trophy className="w-5 h-5 text-amber-400" /> : <BookOpen className="w-5 h-5 text-indigo-400" />}
                   </div>
                   <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors mt-1 shrink-0" />
                 </div>
                 <h3 className="font-bold text-white text-sm leading-snug mb-1 group-hover:text-indigo-200 transition-colors">
                   {subject.name}
                 </h3>
-                <p className="text-[10px] text-gray-500 font-semibold">
-                  {subject.questionCount || 0} question{(subject.questionCount || 0) !== 1 ? "s" : ""} classified
-                </p>
-                <div className="mt-3 flex items-center gap-1.5">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Active</span>
-                </div>
+                {subject.parentSlug ? (
+                  <p className="text-[10px] text-gray-500 font-semibold line-clamp-2">
+                    {(subject.topperFilter || []).length} topper{(subject.topperFilter || []).length !== 1 ? "s" : ""}: {(subject.topperFilter || []).join(", ")}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-500 font-semibold">
+                    {subject.questionCount || 0} question{(subject.questionCount || 0) !== 1 ? "s" : ""} classified
+                  </p>
+                )}
+                {subject.parentSlug ? (
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <Trophy className="w-3 h-3 text-amber-400" />
+                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wide">Topper book · from {subject.parentName}</span>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide">Active</span>
+                  </div>
+                )}
               </button>
             ))}
 

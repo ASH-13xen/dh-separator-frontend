@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   BookOpen,
   Download,
@@ -231,6 +231,200 @@ function TopperRosterModal({ subjectName, data, isLoading, error, onClose }) {
               )}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Topper identity is the name alone, compared case/whitespace-insensitively, with a blank name
+// as its own "Unknown Topper" bucket. Must match normalizeTopperName in subjectController.js.
+function normalizeTopperName(name) {
+  return (name || "").trim().replace(/\s+/g, " ").toLowerCase() || "unknown topper";
+}
+
+// Picker for "Build Topper Book": choose which toppers' answers the new book keeps. Pick order
+// is shown as a number badge because it decides which answers get auto-ticked first (max 3
+// per question). The roster is built from the loaded book itself (with any topper renames
+// already applied), so every topper listed actually matches answers in this book.
+function TopperBookModal({ subjectName, psirData, isCreating, error, onCreate, onCancel }) {
+  const [picked, setPicked] = useState([]); // normalized keys, in pick order
+  const [search, setSearch] = useState("");
+  const [name, setName] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+
+  const roster = useMemo(() => {
+    const byKey = new Map();
+    psirData.forEach((p) => p.topics.forEach((t) => t.questions.forEach((q) => {
+      if (q.isTitlePage) return;
+      (q.file_urls || []).forEach((f) => {
+        const key = normalizeTopperName(f.topper_name);
+        if (!byKey.has(key)) {
+          byKey.set(key, { key, name: (f.topper_name || "").trim() || "Unknown Topper", sheets: 0, questionIds: new Set(), details: new Set() });
+        }
+        const entry = byKey.get(key);
+        entry.sheets++;
+        entry.questionIds.add(q._id);
+        const detail = [f.topper_year && `Year ${f.topper_year}`, f.topper_rank && `Rank ${f.topper_rank}`].filter(Boolean).join(" · ");
+        if (detail) entry.details.add(detail);
+      });
+    })));
+    return [...byKey.values()].sort((a, b) => b.sheets - a.sheets || a.name.localeCompare(b.name));
+  }, [psirData]);
+
+  const rosterByKey = useMemo(() => new Map(roster.map((r) => [r.key, r])), [roster]);
+  const pickedNames = picked.map((k) => rosterByKey.get(k)?.name).filter(Boolean);
+
+  const coverage = useMemo(() => {
+    const set = new Set(picked);
+    let total = 0;
+    const perPaper = psirData.map((p) => {
+      let withAnswers = 0;
+      let all = 0;
+      p.topics.forEach((t) => t.questions.forEach((q) => {
+        if (q.isTitlePage) return;
+        all++;
+        if ((q.file_urls || []).some((f) => set.has(normalizeTopperName(f.topper_name)))) withAnswers++;
+      }));
+      total += withAnswers;
+      return { paper: p.paper, withAnswers, all };
+    });
+    return { total, perPaper };
+  }, [picked, psirData]);
+
+  useEffect(() => {
+    if (nameTouched) return;
+    if (pickedNames.length === 0) { setName(""); return; }
+    const shown = pickedNames.slice(0, 3).join(", ");
+    const more = pickedNames.length > 3 ? ` + ${pickedNames.length - 3} more` : "";
+    setName(`${subjectName} — ${shown}${more}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked, nameTouched, subjectName]);
+
+  const query = search.trim().toLowerCase();
+  const visible = query ? roster.filter((r) => r.name.toLowerCase().includes(query)) : roster;
+
+  const toggle = (key) => {
+    setPicked((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  };
+  const selectAllVisible = () => {
+    setPicked((prev) => [...prev, ...visible.map((r) => r.key).filter((k) => !prev.includes(k))]);
+  };
+
+  const canCreate = picked.length > 0 && coverage.total > 0 && name.trim() && !isCreating;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={isCreating ? undefined : onCancel}>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+            <Trophy className="w-5 h-5 text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-white">Build a Book with Particular Toppers</h3>
+            <p className="text-xs text-gray-400">
+              Creates a new, separate copy of {subjectName} with only these toppers' answers. This book isn't changed.
+            </p>
+          </div>
+          <button onClick={onCancel} disabled={isCreating} className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Search + bulk actions */}
+        <div className="px-6 pt-4 flex items-center gap-2 shrink-0">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${roster.length} topper${roster.length !== 1 ? "s" : ""}…`}
+            className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/60"
+          />
+          <button onClick={selectAllVisible} className="px-3 py-2 rounded-lg text-[11px] font-bold bg-gray-800 hover:bg-gray-700 text-gray-300 cursor-pointer shrink-0">
+            Select All
+          </button>
+          <button onClick={() => setPicked([])} disabled={picked.length === 0} className="px-3 py-2 rounded-lg text-[11px] font-bold bg-gray-800 hover:bg-gray-700 text-gray-300 cursor-pointer shrink-0 disabled:opacity-40">
+            Clear
+          </button>
+        </div>
+        <p className="px-6 pt-2 text-[11px] text-gray-500 shrink-0">
+          Pick order matters: each question auto-ticks up to 3 answers, from your 1st pick onward.
+        </p>
+
+        {/* Roster */}
+        <div className="px-6 py-3 overflow-y-auto flex-1 min-h-[160px]">
+          {roster.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-10">No topper answers in this book yet.</p>
+          ) : visible.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-10">No topper matches "{search}".</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visible.map((r) => {
+                const order = picked.indexOf(r.key);
+                const isPicked = order !== -1;
+                return (
+                  <button
+                    key={r.key}
+                    onClick={() => toggle(r.key)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors cursor-pointer ${isPicked ? "bg-amber-500/10 border-amber-500/50" : "bg-gray-800/40 border-gray-700/60 hover:border-gray-600"}`}
+                  >
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-black shrink-0 ${isPicked ? "bg-amber-500 text-gray-900" : "border border-gray-600"}`}>
+                      {isPicked ? order + 1 : ""}
+                    </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-bold text-sm text-white truncate">{r.name}</span>
+                      {r.details.size > 0 && (
+                        <span className="text-[10px] text-gray-400 truncate">{[...r.details].join("  |  ")}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-black text-purple-300 bg-purple-500/15 px-2 py-1 rounded-full whitespace-nowrap shrink-0">
+                      {r.questionIds.size} question{r.questionIds.size !== 1 ? "s" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer: coverage + name + create */}
+        <div className="p-6 border-t border-gray-800 shrink-0 flex flex-col gap-3">
+          {picked.length > 0 && (
+            <div className="text-[11px] text-gray-400">
+              <span className="font-bold text-gray-200">{coverage.total}</span> question{coverage.total !== 1 ? "s" : ""} will have answers — the rest stay in the book, unticked.
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {coverage.perPaper.map((p) => (
+                  <span key={p.paper} className={`px-2 py-0.5 rounded-full font-bold ${p.withAnswers === 0 ? "bg-red-500/15 text-red-300" : "bg-gray-800 text-gray-300"}`}>
+                    {p.paper}: {p.withAnswers}/{p.all}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
+            placeholder="Book name"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/60"
+          />
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2 text-xs text-red-300">{error}</div>
+          )}
+          <div className="flex justify-end gap-3">
+            <button onClick={onCancel} disabled={isCreating} className="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40">
+              Cancel
+            </button>
+            <button
+              onClick={() => onCreate(name.trim(), pickedNames)}
+              disabled={!canCreate}
+              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-5 rounded-lg shadow-md transition-all text-xs cursor-pointer"
+            >
+              {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {isCreating ? "Creating…" : `Create Book${picked.length ? ` (${picked.length} topper${picked.length !== 1 ? "s" : ""})` : ""}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -624,7 +818,10 @@ function ReviewQuestionRow({
   );
 }
 
-export default function SubjectwiseBookPage({ subject, subjectName }) {
+// topperBook: { parentName, topperFilter } when this is a topper book (a frozen copy of another
+// subject's book), else null. onOpenBook(subjectInfo) switches the hub to another book;
+// onDeleted() returns to the hub after this topper book is deleted.
+export default function SubjectwiseBookPage({ subject, subjectName, topperBook = null, onOpenBook, onDeleted }) {
   const [activePaper, setActivePaper] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -657,6 +854,10 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
   const [topperRoster, setTopperRoster] = useState(null);
   const [isLoadingToppers, setIsLoadingToppers] = useState(false);
   const [topperRosterError, setTopperRosterError] = useState("");
+  const [isTopperBookModalOpen, setIsTopperBookModalOpen] = useState(false);
+  const [isCreatingTopperBook, setIsCreatingTopperBook] = useState(false);
+  const [topperBookError, setTopperBookError] = useState("");
+  const [isDeletingBook, setIsDeletingBook] = useState(false);
 
   const [draggedQuestion, setDraggedQuestion] = useState(null); // { topicKey, qId }
   const [dragOverQuestion, setDragOverQuestion] = useState(null);
@@ -1538,6 +1739,70 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
     }
   };
 
+  // The server builds the topper book from this book's *saved* layouts, so every paper's
+  // current state is saved first (awaited, not debounced) — otherwise an edit made in the last
+  // 800ms, or one still retrying against a cold backend, would be missing from the copy.
+  const createTopperBook = async (name, topperNames, allowDuplicateSet = false) => {
+    setIsCreatingTopperBook(true);
+    setTopperBookError("");
+    try {
+      const saved = await Promise.all(psirData.map(async (p) => {
+        const payload = buildLayoutPayload(p.paper);
+        if (!payload) return true;
+        const r = await fetch(`${API_BASE_URL}/api/subjects/${subject}/layout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return r.ok;
+      }));
+      if (saved.some((ok) => !ok)) throw new Error("Couldn't save this book's latest edits first. The server may be waking up, so try again in a moment.");
+
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/topper-book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, toppers: topperNames, allowDuplicateSet }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && data.code === "DUPLICATE_TOPPER_SET") {
+        if (window.confirm(`${data.error}\n\nCreate another book with the same toppers anyway?`)) {
+          return createTopperBook(name, topperNames, true);
+        }
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || "Failed to create topper book.");
+      setIsTopperBookModalOpen(false);
+      onOpenBook?.(data.subject);
+    } catch (err) {
+      setTopperBookError(err.message === "Failed to fetch" ? "Couldn't reach the server. It may be waking up, so try again in a moment." : err.message);
+    } finally {
+      setIsCreatingTopperBook(false);
+    }
+  };
+
+  const deleteThisTopperBook = async () => {
+    const confirmed = window.confirm(
+      `Delete "${subjectName}"? This removes the topper book and all its edits. The original ${topperBook?.parentName} book is not affected.\n\nIts compiled PDFs stay in file storage unless you click "Clean File Storage" first.`,
+    );
+    if (!confirmed) return;
+    // Drop pending autosaves so they don't recreate this book's layouts after it's gone.
+    if (pendingSaveTimerRef.current) {
+      clearTimeout(pendingSaveTimerRef.current);
+      pendingSaveTimerRef.current = null;
+    }
+    dirtyPapersRef.current.clear();
+    setIsDeletingBook(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete topper book.");
+      onDeleted?.();
+    } catch (err) {
+      alert(err.message);
+      setIsDeletingBook(false);
+    }
+  };
+
   const cleanupStorage = async () => {
     const confirmed = window.confirm(
       `This will permanently delete all compiled ${subjectName} book files from server storage to free up space. Job history and selections are kept. Continue?`,
@@ -1606,6 +1871,18 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
             <Layers className="w-3.5 h-3.5" />
             Generate All Books
           </button>
+          {!topperBook && (
+          <button
+            onClick={() => { setTopperBookError(""); setIsTopperBookModalOpen(true); }}
+            disabled={psirData.length === 0}
+            title="Create a new, separate book that keeps only the answers of toppers you pick"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-600 hover:bg-amber-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <Trophy className="w-3.5 h-3.5" />
+            Build Topper Book
+          </button>
+          )}
+          {!topperBook && (
           <button
             onClick={openTopperRoster}
             title="See which toppers' answer sheets have been uploaded for this subject"
@@ -1614,6 +1891,8 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
             <Users className="w-3.5 h-3.5" />
             View Toppers
           </button>
+          )}
+          {!topperBook && (
           <button
             onClick={reclassifyNewQuestions}
             disabled={isReclassifying}
@@ -1623,6 +1902,7 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
             {isReclassifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
             {isReclassifying ? "Classifying…" : "Sync New Questions"}
           </button>
+          )}
           <button
             onClick={cleanupStorage}
             disabled={isCleaningStorage}
@@ -1632,11 +1912,36 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
             {isCleaningStorage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
             Clean File Storage
           </button>
+          {topperBook && (
+            <button
+              onClick={deleteThisTopperBook}
+              disabled={isDeletingBook}
+              title="Delete this topper book. The original subject book is not affected."
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-950/60 border border-red-500/40 text-red-300 hover:bg-red-900/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isDeletingBook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Delete Book
+            </button>
+          )}
         </div>
         <div className="inline-flex w-16 h-16 bg-linear-to-br from-indigo-500 to-purple-500 rounded-2xl items-center justify-center shadow-lg shadow-indigo-500/10 mb-4">
           <BookOpen className="w-8 h-8 text-white" />
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-white mb-2">{subjectName}</h1>
+        {topperBook && (
+          <div className="flex flex-col items-center gap-2 mb-3">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full">
+              <Trophy className="w-3 h-3" /> Topper book · copied from {topperBook.parentName}
+            </span>
+            <div className="flex flex-wrap justify-center gap-1.5 max-w-3xl">
+              {(topperBook.topperFilter || []).map((t, i) => (
+                <span key={t} className="text-[11px] font-bold text-gray-300 bg-gray-800 border border-gray-700 px-2 py-0.5 rounded-full">
+                  {i + 1}. {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="text-gray-400 max-w-xl mx-auto text-sm">
           Select a topic on the left to review it on the right — fully expanded with topper answers always visible. Drag questions/topics on the left to reorder.
         </p>
@@ -1855,6 +2160,17 @@ export default function SubjectwiseBookPage({ subject, subjectName }) {
           isLoading={isLoadingToppers}
           error={topperRosterError}
           onClose={() => setIsTopperModalOpen(false)}
+        />
+      )}
+
+      {isTopperBookModalOpen && (
+        <TopperBookModal
+          subjectName={subjectName}
+          psirData={psirData}
+          isCreating={isCreatingTopperBook}
+          error={topperBookError}
+          onCreate={(name, topperNames) => createTopperBook(name, topperNames)}
+          onCancel={() => setIsTopperBookModalOpen(false)}
         />
       )}
 
