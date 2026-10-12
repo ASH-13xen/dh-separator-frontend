@@ -431,6 +431,166 @@ function TopperBookModal({ subjectName, psirData, isCreating, error, onCreate, o
   );
 }
 
+// Every topper in this book in one searchable list, with their name/year/rank/marks editable in
+// one place instead of sheet by sheet. Saving applies the edit to every answer sheet of that
+// topper across all papers of this book. A field whose sheets disagree (e.g. two different
+// ranks typed at upload) starts blank and is only overwritten if the user types a value, so
+// fixing a name never silently flattens differing details.
+function EditToppersModal({ subjectName, psirData, onSave, onClose }) {
+  const [search, setSearch] = useState("");
+  const [editingKey, setEditingKey] = useState(null);
+  const [initial, setInitial] = useState({});
+  const [values, setValues] = useState({});
+
+  const FIELDS = [
+    { field: "topper_year", label: "Year" },
+    { field: "topper_rank", label: "Rank" },
+    { field: "topper_marks", label: "Marks" },
+  ];
+
+  const roster = useMemo(() => {
+    const byKey = new Map();
+    psirData.forEach((p) => p.topics.forEach((t) => t.questions.forEach((q) => {
+      if (q.isTitlePage) return;
+      (q.file_urls || []).forEach((f) => {
+        const key = normalizeTopperName(f.topper_name);
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key, name: (f.topper_name || "").trim() || "Unknown Topper", sheets: 0, questionIds: new Set(),
+            topper_year: new Set(), topper_rank: new Set(), topper_marks: new Set(),
+          });
+        }
+        const entry = byKey.get(key);
+        entry.sheets++;
+        entry.questionIds.add(q._id);
+        FIELDS.forEach(({ field }) => entry[field].add(String(f[field] || "").trim()));
+      });
+    })));
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [psirData]);
+
+  const query = search.trim().toLowerCase();
+  const visible = query ? roster.filter((r) => r.name.toLowerCase().includes(query)) : roster;
+
+  const startEdit = (r) => {
+    const start = { topper_name: r.name };
+    FIELDS.forEach(({ field }) => { start[field] = r[field].size === 1 ? [...r[field]][0] : ""; });
+    setInitial(start);
+    setValues(start);
+    setEditingKey(r.key);
+  };
+
+  const save = () => {
+    const changes = {};
+    const newName = (values.topper_name || "").trim();
+    if (newName && newName !== initial.topper_name) changes.topper_name = newName;
+    FIELDS.forEach(({ field }) => {
+      const v = (values[field] || "").trim();
+      if (v !== initial[field]) changes[field] = v;
+    });
+    onSave(editingKey, changes);
+    setEditingKey(null);
+  };
+
+  const summary = (r) => FIELDS.map(({ field, label }) => {
+    const vals = [...r[field]].filter(Boolean);
+    return `${label}: ${vals.length === 0 ? "N/A" : vals.join(" / ")}`;
+  }).join("  |  ");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <UserCheck className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-white">Edit Toppers</h3>
+            <p className="text-xs text-gray-400 truncate">
+              {subjectName} — {roster.length} topper{roster.length !== 1 ? "s" : ""}. Changes apply to all of a topper's answers in this book only.
+            </p>
+          </div>
+          <button onClick={onClose} className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 pt-4 shrink-0">
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search toppers…"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+          />
+        </div>
+
+        <div className="px-6 py-4 overflow-y-auto flex-1 min-h-[160px]">
+          {roster.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-10">No topper answers in this book yet.</p>
+          ) : visible.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-10">No topper matches "{search}".</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visible.map((r) => (
+                <div key={r.key} className={`px-4 py-3 rounded-xl border ${editingKey === r.key ? "bg-[#1e293b]/40 border-indigo-500/60" : "bg-gray-800/40 border-gray-700/60"}`}>
+                  {editingKey === r.key ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        autoFocus
+                        placeholder="Topper name"
+                        value={values.topper_name || ""}
+                        onChange={(e) => setValues((v) => ({ ...v, topper_name: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditingKey(null); }}
+                        className="bg-gray-800 border border-indigo-500/60 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        {FIELDS.map(({ field, label }) => (
+                          <input
+                            key={field}
+                            placeholder={r[field].size > 1 ? `${label} (mixed, blank keeps)` : label}
+                            value={values[field] || ""}
+                            onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditingKey(null); }}
+                            className="bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={save} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-[11px] font-bold cursor-pointer">
+                          <Check className="w-3 h-3" /> Save to {r.sheets} answer{r.sheets !== 1 ? "s" : ""}
+                        </button>
+                        <button onClick={() => setEditingKey(null)} className="flex items-center gap-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white text-[11px] font-bold cursor-pointer">
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="font-bold text-sm text-white truncate">{r.name}</span>
+                        <span className="text-[10px] text-gray-400 truncate">{summary(r)}</span>
+                      </div>
+                      <span className="text-[10px] font-black text-purple-300 bg-purple-500/15 px-2 py-1 rounded-full whitespace-nowrap shrink-0">
+                        {r.questionIds.size} question{r.questionIds.size !== 1 ? "s" : ""}
+                      </span>
+                      <button onClick={() => startEdit(r)} className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-indigo-300 transition-colors shrink-0 cursor-pointer" title="Edit this topper's details">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddTitlePageModal({ value, onChange, onAdd, onCancel }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -855,6 +1015,7 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
   const [isLoadingToppers, setIsLoadingToppers] = useState(false);
   const [topperRosterError, setTopperRosterError] = useState("");
   const [isTopperBookModalOpen, setIsTopperBookModalOpen] = useState(false);
+  const [isEditToppersModalOpen, setIsEditToppersModalOpen] = useState(false);
   const [isCreatingTopperBook, setIsCreatingTopperBook] = useState(false);
   const [topperBookError, setTopperBookError] = useState("");
   const [isDeletingBook, setIsDeletingBook] = useState(false);
@@ -1419,6 +1580,28 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
     setEditingTopperKey(null);
   };
 
+  // Applies one edit from the Edit Toppers modal to every answer sheet of that topper, in every
+  // paper of this book. The generic autosave effect only marks `activePaper` dirty, so every
+  // other paper holding one of this topper's sheets is marked here explicitly.
+  const saveTopperForWholeBook = (topperKey, changes) => {
+    if (Object.keys(changes).length === 0) return;
+    const isMatch = (f) => normalizeTopperName(f.topper_name) === topperKey;
+    psirData.forEach((p) => {
+      if (p.topics.some((t) => t.questions.some((q) => (q.file_urls || []).some(isMatch)))) dirtyPapersRef.current.add(p.paper);
+    });
+    setPsirData((prev) => prev.map((p) => ({
+      ...p,
+      topics: p.topics.map((t) => ({
+        ...t,
+        questions: t.questions.map((q) => (
+          (q.file_urls || []).some(isMatch)
+            ? { ...q, file_urls: q.file_urls.map((f) => (isMatch(f) ? { ...f, ...changes } : f)) }
+            : q
+        )),
+      })),
+    })));
+  };
+
   const saveQuestionText = () => {
     const newText = editingQuestionValue.trim();
     if (!newText) { setEditingQuestionId(null); return; }
@@ -1882,6 +2065,15 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
             Build Topper Book
           </button>
           )}
+          <button
+            onClick={() => setIsEditToppersModalOpen(true)}
+            disabled={psirData.length === 0}
+            title="See every topper in this book and fix their name, year, rank or marks in one place"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 border border-gray-800 text-gray-400 hover:text-indigo-400 hover:border-indigo-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            Edit Toppers
+          </button>
           {!topperBook && (
           <button
             onClick={openTopperRoster}
@@ -2160,6 +2352,15 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
           isLoading={isLoadingToppers}
           error={topperRosterError}
           onClose={() => setIsTopperModalOpen(false)}
+        />
+      )}
+
+      {isEditToppersModalOpen && (
+        <EditToppersModal
+          subjectName={subjectName}
+          psirData={psirData}
+          onSave={saveTopperForWholeBook}
+          onClose={() => setIsEditToppersModalOpen(false)}
         />
       )}
 
