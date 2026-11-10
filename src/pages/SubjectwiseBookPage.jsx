@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { buildQuestionsPdfTopics } from "../utils/questionsPdfPayload";
 import {
   BookOpen,
   Download,
@@ -30,6 +31,92 @@ import {
 
 const API_BASE_URL =
   import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000";
+
+// Resolution of the topper answer-sheet images in a compiled book. The keys are resolved to
+// dpi / JPEG quality on the server (backend utils/bookImageQuality.js); "standard" is what
+// every book used before this choice existed.
+const IMAGE_QUALITY_OPTIONS = [
+  { value: "compact", label: "Compact - 50 dpi", hint: "Smallest file. Images a little softer than Standard." },
+  { value: "standard", label: "Standard - 72 dpi", hint: "The image quality every book has used so far." },
+  { value: "high", label: "High - 110 dpi", hint: "Sharper images. File about twice as big and slower to build." },
+  { value: "max", label: "Maximum - 150 dpi", hint: "Sharpest images. File several times bigger, slowest to build and download." },
+];
+const IMAGE_QUALITY_STORAGE_KEY = "subjectBookImageQuality";
+
+function ImageQualitySelect({ value, onChange, compact = false }) {
+  const option = IMAGE_QUALITY_OPTIONS.find((o) => o.value === value) || IMAGE_QUALITY_OPTIONS[1];
+  return (
+    <label className={`flex flex-col gap-1 ${compact ? "" : "min-w-[190px]"}`} title={option.hint}>
+      <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Image resolution</span>
+      <select
+        value={option.value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-2 text-xs font-bold text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 cursor-pointer"
+      >
+        {IMAGE_QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {!compact && <span className="text-[10px] text-gray-500 leading-snug max-w-[220px]">{option.hint}</span>}
+    </label>
+  );
+}
+
+// Lets the user download one unit's questions as a plain list, in book order — either just the
+// questions ticked for the book, or every question in the unit.
+function QuestionsPdfModal({ paper, includedCount, totalCount, isDownloading, error, onDownload, onCancel }) {
+  const [onlyIncluded, setOnlyIncluded] = useState(includedCount > 0);
+  const options = [
+    { value: true, label: "Questions in the book", detail: `${includedCount} ticked question${includedCount !== 1 ? "s" : ""}, exactly as the book prints them`, disabled: includedCount === 0 },
+    { value: false, label: "All questions in this unit", detail: `${totalCount} question${totalCount !== 1 ? "s" : ""}, ticked or not, in the same order`, disabled: totalCount === 0 },
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={isDownloading ? undefined : onCancel}>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5 text-sky-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-white">Download Questions PDF</h3>
+            <p className="text-xs text-gray-400 truncate">{paper}: just the questions, in the book's order. No answers.</p>
+          </div>
+          <button onClick={onCancel} disabled={isDownloading} className="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-6 flex flex-col gap-2">
+          {options.map((o) => (
+            <button
+              key={String(o.value)}
+              onClick={() => !o.disabled && setOnlyIncluded(o.value)}
+              disabled={o.disabled}
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${onlyIncluded === o.value ? "bg-sky-500/10 border-sky-500/50" : "bg-gray-800/40 border-gray-700/60 hover:border-gray-600"}`}
+            >
+              <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 ${onlyIncluded === o.value ? "border-sky-400 bg-sky-400" : "border-gray-500"}`} />
+              <span className="flex flex-col">
+                <span className="text-sm font-bold text-white">{o.label}</span>
+                <span className="text-[11px] text-gray-400">{o.detail}</span>
+              </span>
+            </button>
+          ))}
+          {error && <div className="bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2 text-xs text-red-300 mt-1">{error}</div>}
+        </div>
+        <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+          <button onClick={onCancel} disabled={isDownloading} className="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40">
+            Cancel
+          </button>
+          <button
+            onClick={() => onDownload(onlyIncluded)}
+            disabled={isDownloading || (onlyIncluded ? includedCount === 0 : totalCount === 0)}
+            className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 text-xs cursor-pointer"
+          >
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isDownloading ? "Building PDF..." : "Download PDF"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function isQuestionReviewed(q, selections, includedQuestions) {
   if (!includedQuestions.has(q._id)) return true;
@@ -637,7 +724,7 @@ function AddTitlePageModal({ value, onChange, onAdd, onCancel }) {
 // Select All). Ordering here doesn't matter — the backend always compiles selected units back
 // in the subject's own unit order, so a combined book from units 1, 3, 6 always reads as a
 // book with units 1, 2, 3 inside, regardless of click order.
-function UnitPickerModal({ papers, onGenerate, onCancel }) {
+function UnitPickerModal({ papers, onGenerate, onCancel, imageQuality, onImageQualityChange }) {
   const [selected, setSelected] = useState(() => new Set(papers.map((p) => p.paper)));
   const allSelected = selected.size === papers.length;
 
@@ -707,7 +794,9 @@ function UnitPickerModal({ papers, onGenerate, onCancel }) {
           ))}
         </div>
 
-        <div className="p-6 border-t border-gray-800 flex justify-end gap-3 shrink-0">
+        <div className="p-6 border-t border-gray-800 flex items-end justify-between gap-3 shrink-0">
+          <ImageQualitySelect value={imageQuality} onChange={onImageQualityChange} compact />
+          <div className="flex gap-3">
           <button
             onClick={onCancel}
             className="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
@@ -721,6 +810,7 @@ function UnitPickerModal({ papers, onGenerate, onCancel }) {
           >
             <BookOpen className="w-4 h-4" /> Generate ({selected.size})
           </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1016,6 +1106,18 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
   const [topperRosterError, setTopperRosterError] = useState("");
   const [isTopperBookModalOpen, setIsTopperBookModalOpen] = useState(false);
   const [isEditToppersModalOpen, setIsEditToppersModalOpen] = useState(false);
+  // Per-browser convenience only — every generate request carries the choice explicitly.
+  const [imageQuality, setImageQuality] = useState(() => {
+    try {
+      const saved = localStorage.getItem(IMAGE_QUALITY_STORAGE_KEY);
+      return IMAGE_QUALITY_OPTIONS.some((o) => o.value === saved) ? saved : "standard";
+    } catch {
+      return "standard";
+    }
+  });
+  const [isQuestionsPdfModalOpen, setIsQuestionsPdfModalOpen] = useState(false);
+  const [isDownloadingQuestions, setIsDownloadingQuestions] = useState(false);
+  const [questionsPdfError, setQuestionsPdfError] = useState("");
   const [isCreatingTopperBook, setIsCreatingTopperBook] = useState(false);
   const [topperBookError, setTopperBookError] = useState("");
   const [isDeletingBook, setIsDeletingBook] = useState(false);
@@ -1583,6 +1685,48 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
   // Applies one edit from the Edit Toppers modal to every answer sheet of that topper, in every
   // paper of this book. The generic autosave effect only marks `activePaper` dirty, so every
   // other paper holding one of this topper's sheets is marked here explicitly.
+  const changeImageQuality = (value) => {
+    setImageQuality(value);
+    try { localStorage.setItem(IMAGE_QUALITY_STORAGE_KEY, value); } catch { /* storage unavailable */ }
+  };
+
+  // Text-only PDF of the active unit's questions in book order, built on the server and saved
+  // straight to the user's downloads.
+  const downloadQuestionsPdf = async (onlyIncluded) => {
+    if (!activePaperNode) return;
+    setIsDownloadingQuestions(true);
+    setQuestionsPdfError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${subject}/questions-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paper: activePaper,
+          section: activePaperNode.section,
+          topics: buildQuestionsPdfTopics(activePaperNode, includedQuestions, onlyIncluded),
+        }),
+      });
+      if (!res.ok) {
+        let message = "Failed to build the questions PDF.";
+        try { message = (await res.json()).error || message; } catch { /* non-JSON error body */ }
+        throw new Error(message);
+      }
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${subjectName} - ${activePaper} - Questions.pdf`.replace(/[\\/:*?"<>|]+/g, "_");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      setIsQuestionsPdfModalOpen(false);
+    } catch (err) {
+      setQuestionsPdfError(err.message === "Failed to fetch" ? "Couldn't reach the server. It may be waking up, so try again in a moment." : err.message);
+    } finally {
+      setIsDownloadingQuestions(false);
+    }
+  };
+
   const saveTopperForWholeBook = (topperKey, changes) => {
     if (Object.keys(changes).length === 0) return;
     const isMatch = (f) => normalizeTopperName(f.topper_name) === topperKey;
@@ -1782,7 +1926,7 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
       const response = await fetch(`${API_BASE_URL}/api/subjects/${subject}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paper: activePaper, selections, includedQuestionIds: orderedIncludedIds }),
+        body: JSON.stringify({ paper: activePaper, selections, includedQuestionIds: orderedIncludedIds, imageQuality }),
       });
       if (!response.ok) {
         const errData = await response.json();
@@ -1813,7 +1957,7 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
       const response = await fetch(`${API_BASE_URL}/api/subjects/${subject}/generate-collective`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ papers: selectedPapers }),
+        body: JSON.stringify({ papers: selectedPapers, imageQuality }),
       });
       if (!response.ok) {
         const errData = await response.json();
@@ -2183,7 +2327,17 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
                   <h2 className="text-xl font-bold text-white mt-0.5">{activePaperNode.section || activePaperNode.paper}</h2>
                   <div className="mt-2"><SaveStatusBadge status={saveStatus} /></div>
                 </div>
-                <div className="flex items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end">
+                <div className="flex flex-wrap items-end gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end">
+                  <ImageQualitySelect value={imageQuality} onChange={changeImageQuality} />
+                  <button
+                    onClick={() => { setQuestionsPdfError(""); setIsQuestionsPdfModalOpen(true); }}
+                    disabled={totalActiveQuestions === 0}
+                    title="Download just this unit's questions as a PDF, in the book's order"
+                    className="px-4 py-2 flex items-center gap-2 rounded-xl text-xs font-black transition-all border cursor-pointer bg-gray-900 text-sky-300 border-gray-700 hover:bg-gray-800 hover:border-sky-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Questions PDF
+                  </button>
                   <button
                     onClick={handleSelectAllToggle}
                     className={`px-4 py-2 flex items-center gap-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${isAllActiveSelected() ? "bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700" : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800"}`}
@@ -2380,6 +2534,20 @@ export default function SubjectwiseBookPage({ subject, subjectName, topperBook =
           papers={psirData}
           onGenerate={generateCombinedBook}
           onCancel={() => setShowUnitPickerModal(false)}
+          imageQuality={imageQuality}
+          onImageQualityChange={changeImageQuality}
+        />
+      )}
+
+      {isQuestionsPdfModalOpen && activePaperNode && (
+        <QuestionsPdfModal
+          paper={activePaper}
+          includedCount={selectedActiveQuestions}
+          totalCount={totalActiveQuestions}
+          isDownloading={isDownloadingQuestions}
+          error={questionsPdfError}
+          onDownload={downloadQuestionsPdf}
+          onCancel={() => setIsQuestionsPdfModalOpen(false)}
         />
       )}
 
